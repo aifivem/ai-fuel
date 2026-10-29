@@ -1,0 +1,299 @@
+{
+  "station_1": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -71.28,
+      "y": -1761.16,
+      "z": 29.48
+    },
+    "radius": 14.3,
+    "price": 3,
+    "blip": true
+  },
+  "station_2": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 264.74,
+      "y": -1260.98,
+      "z": 29.18
+    },
+    "radius": 15.9,
+    "price": 3,
+    "blip": true
+  },
+  "station_3": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1208.66,
+      "y": -1402.64,
+      "z": 35.22
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_4": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 818.83,
+      "y": -1029.89,
+      "z": 26.17
+    },
+    "radius": 13.2,
+    "price": 3,
+    "blip": true
+  },
+  "station_5": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1181.27,
+      "y": -329.57,
+      "z": 69.18
+    },
+    "radius": 14.2,
+    "price": 3,
+    "blip": true
+  },
+  "station_6": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 621.07,
+      "y": 269.52,
+      "z": 103.04
+    },
+    "radius": 14.3,
+    "price": 3,
+    "blip": true
+  },
+  "station_7": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -1437.58,
+      "y": -276.38,
+      "z": 46.21
+    },
+    "radius": 12.9,
+    "price": 3,
+    "blip": true
+  },
+  "station_8": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -2096.6,
+      "y": -318.15,
+      "z": 13.02
+    },
+    "radius": 16.1,
+    "price": 3,
+    "blip": true
+  },
+  "station_9": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -1799.03,
+      "y": 803.11,
+      "z": 138.4
+    },
+    "radius": 14.2,
+    "price": 3,
+    "blip": true
+  },
+  "station_10": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -524.84,
+      "y": -1211.02,
+      "z": 18.18
+    },
+    "radius": 11.6,
+    "price": 3,
+    "blip": true
+  },
+  "station_11": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 2581.56,
+      "y": 361.65,
+      "z": 108.46
+    },
+    "radius": 12.4,
+    "price": 3,
+    "blip": true
+  },
+  "station_12": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -319.84,
+      "y": -1471.77,
+      "z": 30.55
+    },
+    "radius": 14.0,
+    "price": 3,
+    "blip": true
+  },
+  "station_13": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 175.31,
+      "y": -1561.73,
+      "z": 29.26
+    },
+    "radius": 10.7,
+    "price": 3,
+    "blip": true
+  },
+  "station_14": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -723.72,
+      "y": -935.51,
+      "z": 19.21
+    },
+    "radius": 13.7,
+    "price": 3,
+    "blip": true
+  },
+  "station_15": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -2555.31,
+      "y": 2334.01,
+      "z": 33.06
+    },
+    "radius": 12.4,
+    "price": 3,
+    "blip": true
+  },
+  "station_16": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 49.69,
+      "y": 2778.33,
+      "z": 57.88
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_17": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 264.15,
+      "y": 2607.05,
+      "z": 44.95
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_18": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1207.56,
+      "y": 2660.2,
+      "z": 37.81
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_19": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 2538.0,
+      "y": 2593.83,
+      "z": 37.94
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_20": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 2680.01,
+      "y": 3265.0,
+      "z": 55.24
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_21": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 2005.07,
+      "y": 3774.33,
+      "z": 32.18
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_22": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1688.42,
+      "y": 4930.85,
+      "z": 42.08
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_23": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1039.34,
+      "y": 2671.78,
+      "z": 39.55
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_24": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1785.58,
+      "y": 3330.47,
+      "z": 41.38
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_25": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 1702.79,
+      "y": 6416.86,
+      "z": 33.64
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  },
+  "station_26": {
+    "label": "Gas Station",
+    "coords": {
+      "x": 179.94,
+      "y": 6602.6,
+      "z": 31.85
+    },
+    "radius": 11.9,
+    "price": 3,
+    "blip": true
+  },
+  "station_27": {
+    "label": "Gas Station",
+    "coords": {
+      "x": -93.98,
+      "y": 6420.1,
+      "z": 31.48
+    },
+    "radius": 10,
+    "price": 3,
+    "blip": true
+  }
+}

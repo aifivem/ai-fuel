@@ -1,0 +1,8 @@
+{
+  "consumption": 1.0,
+  "accounts": [
+    "cash",
+    "bank"
+  ],
+  "refuelSecondsPerLiter": 0.15
+}

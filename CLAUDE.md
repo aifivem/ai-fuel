@@ -5,7 +5,7 @@ Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag 
 ## Decisions
 
 - Only the driver's client burns fuel (1 s timer from rpm and vehicle class, `common/fuel.ts`), applies it to the game and reports it every 5 s; the server takes only lower values and writes the state bag. Bicycles and electric models burn nothing.
-- Refuelling: inside a station zone the prompt shows; the client plays the progress (time per percent), then the server checks distance, charges the accounts in order and fills the bag.
+- Refuelling: each station is a lib `Points` entry (sphere of its radius) offered only to a driver (`canShow`, refreshed on `onCache("seat")`); the client plays the progress (time per percent), then the server checks distance, charges the accounts in order and fills the bag.
 - Stations are panel records (27 defaults converted from ox_fuel's station list, GPL-3.0).
 
 ## Contracts

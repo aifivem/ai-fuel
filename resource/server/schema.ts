@@ -1,5 +1,6 @@
 import type { PanelSchema } from "@aicore-fivem/shared";
 import { DEFAULT_BLIP, ELECTRIC_MODELS } from "common/fuel";
+import { BLIP_STYLE_FIELDS } from "@aicore-fivem/lib/shared";
 
 /** ai-fuel's panel: how fast vehicles burn fuel, how refuelling is paid, where the stations are. */
 export const fuelSchema: PanelSchema = {
@@ -27,11 +28,7 @@ export const fuelSchema: PanelSchema = {
         },
         blip: {
           type: "object",
-          fields: {
-            sprite: { type: "number", min: 0, max: 1000, integer: true },
-            color: { type: "number", min: 0, max: 100, integer: true },
-            scale: { type: "number", min: 0.3, max: 2 },
-          },
+          fields: BLIP_STYLE_FIELDS,
         },
       },
       defaults: {

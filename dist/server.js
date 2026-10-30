@@ -56,7 +56,35 @@ function readInt(value, min, max) {
 const readId = (value) => readInt(value, 1, 2147483647), fail = (error) => ({
 	ok: !1,
 	error
-}), distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), isObject = (value) => typeof value == "object" && !!value && !Array.isArray(value);
+}), distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), BLIP_STYLE_FIELDS = {
+	sprite: {
+		type: "number",
+		min: 0,
+		max: 1e3,
+		integer: !0
+	},
+	color: {
+		type: "number",
+		min: 0,
+		max: 100,
+		integer: !0
+	},
+	scale: {
+		type: "number",
+		min: .3,
+		max: 2
+	}
+};
+function readBlipStyle(value, fallback) {
+	let v = record(value);
+	return {
+		sprite: int(v.sprite, fallback.sprite, 0, 1e3),
+		color: int(v.color, fallback.color, 0, 100),
+		scale: num(v.scale, fallback.scale, .3, 2)
+	};
+}
+// ../../../packages/lib/src/shared/records.ts
+const isObject = (value) => typeof value == "object" && !!value && !Array.isArray(value);
 function readRecords(raw, readOne) {
 	let out = new Map();
 	if (!isObject(raw)) return out;
@@ -897,6 +925,10 @@ var OnlinePlayers = class {
 	character(source) {
 		return this.start(), this.players.get(source)?.character ?? null;
 	}
+	name(source, options = {}) {
+		let c = this.character(source);
+		return c ? `${c.firstname} ${c.lastname}` : options.fallback === !1 ? "" : GetPlayerName(String(source));
+	}
 	jobs(source) {
 		return this.start(), this.players.get(source)?.jobNames ?? [];
 	}
@@ -1247,11 +1279,11 @@ function readSettings(raw) {
 		accounts: accounts.length ? accounts : ["cash", "bank"],
 		refuelSecondsPerLiter: num(s.refuelSecondsPerLiter, .15, 0, 5),
 		electricModels: Array.isArray(s.electricModels) ? s.electricModels.filter((m) => typeof m == "string").map((m) => m.toLowerCase()) : [...ELECTRIC_MODELS],
-		blip: {
-			sprite: int(blip.sprite, DEFAULT_BLIP.sprite, 0, 1e3),
-			color: int(blip.color, DEFAULT_BLIP.color, 0, 100),
-			scale: num(blip.scale, DEFAULT_BLIP.scale, .3, 2)
-		}
+		blip: readBlipStyle(blip, {
+			sprite: DEFAULT_BLIP.sprite,
+			color: DEFAULT_BLIP.color,
+			scale: DEFAULT_BLIP.scale
+		})
 	};
 }
 function readStations(raw) {
@@ -1328,25 +1360,7 @@ const ELECTRIC_MODELS = [
 				},
 				blip: {
 					type: "object",
-					fields: {
-						sprite: {
-							type: "number",
-							min: 0,
-							max: 1e3,
-							integer: !0
-						},
-						color: {
-							type: "number",
-							min: 0,
-							max: 100,
-							integer: !0
-						},
-						scale: {
-							type: "number",
-							min: .3,
-							max: 2
-						}
-					}
+					fields: BLIP_STYLE_FIELDS
 				}
 			},
 			defaults: {

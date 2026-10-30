@@ -1,7 +1,7 @@
 import {
   bool,
-  int,
   num,
+  readBlipStyle,
   readFinite,
   readId,
   record,
@@ -102,11 +102,7 @@ export function readSettings(raw: unknown): Settings {
           .filter((m): m is string => typeof m === "string")
           .map((m) => m.toLowerCase())
       : [...ELECTRIC_MODELS],
-    blip: {
-      sprite: int(blip.sprite, DEFAULT_BLIP.sprite, 0, 1000),
-      color: int(blip.color, DEFAULT_BLIP.color, 0, 100),
-      scale: num(blip.scale, DEFAULT_BLIP.scale, 0.3, 2),
-    },
+    blip: readBlipStyle(blip, { sprite: DEFAULT_BLIP.sprite, color: DEFAULT_BLIP.color, scale: DEFAULT_BLIP.scale }),
   };
 }
 

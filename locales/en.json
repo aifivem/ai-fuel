@@ -34,5 +34,10 @@
   "ADMIN_H_REFUEL_TIME": "Seconds per percent filled.",
   "ADMIN_F_ACCOUNTS": "Paid from",
   "ADMIN_H_ACCOUNTS": "Money accounts tried in order.",
-  "ADMIN_P_ACCOUNTS": "cash"
+  "ADMIN_P_ACCOUNTS": "cash",
+  "ADMIN_F_ELECTRIC": "Electric models",
+  "ADMIN_H_ELECTRIC": "Vehicle models (spawn names) that burn no fuel; add your add-on electric cars here.",
+  "ADMIN_P_ELECTRIC": "voltic",
+  "ADMIN_F_BLIP_STYLE": "Station blip",
+  "ADMIN_H_BLIP_STYLE": "How gas stations look on the map; each station switches its blip on or off."
 }

@@ -1,4 +1,5 @@
 import type { PanelSchema } from "@aicore-fivem/shared";
+import { DEFAULT_BLIP, ELECTRIC_MODELS } from "common/fuel";
 
 /** ai-fuel's panel: how fast vehicles burn fuel, how refuelling is paid, where the stations are. */
 export const fuelSchema: PanelSchema = {
@@ -18,6 +19,27 @@ export const fuelSchema: PanelSchema = {
           pattern: "^[a-z0-9_]{2,32}$",
         },
         refuelSecondsPerLiter: { type: "number", min: 0, max: 5 },
+        electricModels: {
+          type: "names",
+          max: 200,
+          itemMax: 32,
+          pattern: "^[a-z0-9_]+$",
+        },
+        blip: {
+          type: "object",
+          fields: {
+            sprite: { type: "number", min: 0, max: 1000, integer: true },
+            color: { type: "number", min: 0, max: 100, integer: true },
+            scale: { type: "number", min: 0.3, max: 2 },
+          },
+        },
+      },
+      defaults: {
+        consumption: 1,
+        accounts: ["cash", "bank"],
+        refuelSecondsPerLiter: 0.15,
+        electricModels: ELECTRIC_MODELS,
+        blip: DEFAULT_BLIP,
       },
     },
     stations: {
@@ -131,6 +153,19 @@ export const fuelSchema: PanelSchema = {
               label: "ADMIN_F_ACCOUNTS",
               hint: "ADMIN_H_ACCOUNTS",
               placeholder: "ADMIN_P_ACCOUNTS",
+            },
+            {
+              widget: "tags",
+              path: "electricModels",
+              label: "ADMIN_F_ELECTRIC",
+              hint: "ADMIN_H_ELECTRIC",
+              placeholder: "ADMIN_P_ELECTRIC",
+            },
+            {
+              widget: "blip",
+              path: "blip",
+              label: "ADMIN_F_BLIP_STYLE",
+              hint: "ADMIN_H_BLIP_STYLE",
             },
           ],
         },

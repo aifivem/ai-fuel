@@ -29,11 +29,44 @@
       "type": "number",
       "minimum": 0,
       "maximum": 5
+    },
+    "electricModels": {
+      "description": "Electric models: Vehicle models (spawn names) that burn no fuel; add your add-on electric cars here.",
+      "type": "array",
+      "maxItems": 200,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 32,
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "blip": {
+      "description": "Station blip: How gas stations look on the map; each station switches its blip on or off.",
+      "type": "object",
+      "properties": {
+        "sprite": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "color": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 2
+        }
+      },
+      "required": [
+        "sprite",
+        "color",
+        "scale"
+      ]
     }
   },
-  "required": [
-    "consumption",
-    "accounts",
-    "refuelSecondsPerLiter"
-  ]
+  "required": []
 }

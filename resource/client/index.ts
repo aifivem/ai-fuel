@@ -3,25 +3,16 @@ import {
   Blips,
   cache,
   EntityState,
-  loadLocaleTexts,
   onCache,
   stateNumber,
 } from "@aicore-fivem/lib/client";
-import { Locale } from "common";
-import {
-  ELECTRIC,
-  EVENTS,
-  FUEL_BAG,
-  readSettings,
-  readStations,
-} from "common/fuel";
+import { EVENTS, FUEL_BAG, readSettings, readStations } from "common/fuel";
 
 import { configurePump } from "./pump";
 
 const fuelState = new EntityState(FUEL_BAG, stateNumber);
 
 const world = new AdminWorld(["settings", "stations"]);
-const texts = loadLocaleTexts();
 
 /** Game consumption per settings unit: at 1 a full tank lasts about 25 minutes of mixed driving. */
 const RATE = 10;
@@ -33,6 +24,7 @@ const RATE = 10;
  */
 class Burner {
   settings = readSettings(world.get("settings"));
+  private electric = new Set<number>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private tank = 0;
   private reported = 100;
@@ -45,26 +37,27 @@ class Burner {
 
   applyRate(): void {
     SetFuelConsumptionRateMultiplier(this.settings.consumption * RATE);
+    this.electric = new Set(
+      this.settings.electricModels.map((m) => GetHashKey(m)),
+    );
   }
 
   start(vehicle: number): void {
     this.stop();
-    const model = GetDisplayNameFromVehicleModel(
-      GetEntityModel(vehicle),
-    ).toLowerCase();
+    const electric = this.electric.has(GetEntityModel(vehicle));
     this.tank = GetVehicleHandlingFloat(
       vehicle,
       "CHandlingData",
       "fPetrolTankVolume",
     );
-    if (ELECTRIC.has(model))
+    if (electric)
       SetVehicleHandlingFloat(
         vehicle,
         "CHandlingData",
         "fPetrolConsumptionRate",
         0,
       );
-    if (ELECTRIC.has(model) || this.tank <= 0) return;
+    if (electric || this.tank <= 0) return;
     const fuel = fuelState.get(vehicle) ?? 100;
     SetVehicleFuelLevel(vehicle, (fuel / 100) * this.tank);
     this.reported = fuel;
@@ -109,10 +102,11 @@ onCache("seat", (seat) =>
 );
 if (cache.seat === -1 && cache.vehicle !== false) burner.start(cache.vehicle);
 
-configurePump(burner.settings.refuelSecondsPerLiter, texts);
-world.onChange("settings", () =>
-  configurePump(burner.settings.refuelSecondsPerLiter, texts),
-);
+configurePump(burner.settings.refuelSecondsPerLiter);
+world.onChange("settings", () => {
+  configurePump(burner.settings.refuelSecondsPerLiter);
+  rebuild();
+});
 
 /** Station blips; refuelling itself happens at the map's pumps (`pump.ts`). */
 const blips = new Blips();
@@ -122,9 +116,7 @@ function rebuild(): void {
     if (station.blip)
       blips.add(station.id, {
         coords: { x: station.x, y: station.y, z: station.z },
-        sprite: 361,
-        color: 1,
-        scale: 0.6,
+        ...burner.settings.blip,
         label: station.label,
       });
 }

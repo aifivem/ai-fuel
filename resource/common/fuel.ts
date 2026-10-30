@@ -1,4 +1,13 @@
-import { bool, num, record, str } from "@aicore-fivem/lib/shared";
+import {
+  bool,
+  int,
+  num,
+  readFinite,
+  readId,
+  record,
+  str,
+} from "@aicore-fivem/lib/shared";
+import { VEHICLE_BAGS } from "@aicore-fivem/shared";
 
 /** ai-fuel's contracts and panel content. No natives. */
 
@@ -25,16 +34,12 @@ export interface Nozzle {
 }
 export function toNozzle(v: unknown): Nozzle | undefined {
   const r = record(v);
-  return typeof r.x === "number" &&
-    typeof r.y === "number" &&
-    typeof r.z === "number"
-    ? {
-        x: r.x,
-        y: r.y,
-        z: r.z,
-        netId: typeof r.netId === "number" ? r.netId : null,
-      }
-    : undefined;
+  const x = readFinite(r.x);
+  const y = readFinite(r.y);
+  const z = readFinite(r.z);
+  return x === null || y === null || z === null
+    ? undefined
+    : { x, y, z, netId: readId(r.netId) };
 }
 
 /** Map pump models: the nozzle is taken from these. */
@@ -51,13 +56,23 @@ export const PUMP_MODELS = [
 export const HOSE_LENGTH = 8;
 
 /** The vehicle state bag holding fuel 0-100 (ai-vehicles seeds it on spawn, ai-hud shows it). */
-export const FUEL_BAG = "fuel";
+export const FUEL_BAG = VEHICLE_BAGS.fuel;
+
+export interface BlipStyle {
+  sprite: number;
+  color: number;
+  scale: number;
+}
 
 export interface Settings {
   /** Multiplier on the burn rate (1 = a full tank lasts about 25 minutes at mixed driving). */
   consumption: number;
   accounts: string[];
   refuelSecondsPerLiter: number;
+  /** Models that burn no fuel (spawn names, lower case). */
+  electricModels: string[];
+  /** Look of every station's map blip. */
+  blip: BlipStyle;
 }
 
 export interface Station {
@@ -77,10 +92,21 @@ export function readSettings(raw: unknown): Settings {
   const accounts = Array.isArray(s.accounts)
     ? s.accounts.filter((a): a is string => typeof a === "string")
     : [];
+  const blip = record(s.blip);
   return {
     consumption: num(s.consumption, 1, 0, 10),
     accounts: accounts.length ? accounts : ["cash", "bank"],
     refuelSecondsPerLiter: num(s.refuelSecondsPerLiter, 0.15, 0, 5),
+    electricModels: Array.isArray(s.electricModels)
+      ? s.electricModels
+          .filter((m): m is string => typeof m === "string")
+          .map((m) => m.toLowerCase())
+      : [...ELECTRIC_MODELS],
+    blip: {
+      sprite: int(blip.sprite, DEFAULT_BLIP.sprite, 0, 1000),
+      color: int(blip.color, DEFAULT_BLIP.color, 0, 100),
+      scale: num(blip.scale, DEFAULT_BLIP.scale, 0.3, 2),
+    },
   };
 }
 
@@ -103,8 +129,8 @@ export function readStations(raw: unknown): Map<string, Station> {
   return out;
 }
 
-/** Electric models: no fuel use (no charging stations yet). */
-export const ELECTRIC = new Set([
+/** Default electric models (panel `electricModels`): no fuel use (no charging stations yet). */
+export const ELECTRIC_MODELS = [
   "voltic",
   "voltic2",
   "raiden",
@@ -124,4 +150,6 @@ export const ELECTRIC = new Set([
   "caddy3",
   "airtug",
   "rcbandito",
-]);
+];
+
+export const DEFAULT_BLIP: BlipStyle = { sprite: 361, color: 1, scale: 0.6 };

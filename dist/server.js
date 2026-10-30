@@ -34,6 +34,9 @@ var SourceLock = class {
 function num(value, fallback, min = -Infinity, max = Infinity) {
 	return typeof value == "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 }
+function int(value, fallback, min = -Infinity, max = Infinity) {
+	return Math.round(num(value, fallback, min, max));
+}
 function bool(value, fallback) {
 	return typeof value == "boolean" ? value : fallback;
 }
@@ -43,8 +46,17 @@ function str(value, fallback, max = 64) {
 function record(value) {
 	return typeof value == "object" && value && !Array.isArray(value) ? value : {};
 }
-// ../../../packages/lib/src/shared/records.ts
-const isObject = (value) => typeof value == "object" && !!value && !Array.isArray(value);
+// ../../../packages/lib/src/shared/strict.ts
+function readFinite(value) {
+	return typeof value == "number" && Number.isFinite(value) ? value : null;
+}
+function readInt(value, min, max) {
+	return Number.isInteger(value) && value >= min && value <= max ? value : null;
+}
+const readId = (value) => readInt(value, 1, 2147483647), fail = (error) => ({
+	ok: !1,
+	error
+}), distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), isObject = (value) => typeof value == "object" && !!value && !Array.isArray(value);
 function readRecords(raw, readOne) {
 	let out = new Map();
 	if (!isObject(raw)) return out;
@@ -205,7 +217,7 @@ const CORE = {
 	clientPlayerLoadedEvent: "ai-core:client:playerLoaded",
 	clientPlayerUnloadedEvent: "ai-core:client:playerUnloaded",
 	clientCharacterPortraitEvent: "ai-core:client:characterPortrait",
-	clientCharacterLookEvent: "ai-core:client:characterLook",
+	characterLooksEvent: "ai-core:client:characterLooks",
 	clientPromptPressedEvent: "ai-core:client:promptPressed",
 	clientCacheEvent: "ai-core:client:cache",
 	clientHudVisibleEvent: "ai-core:client:hudVisible",
@@ -228,6 +240,12 @@ const CORE = {
 	recommendationEvent: "ai-core:admin:recommendation",
 	worldEvent: (resource) => `${resource}:admin:world`,
 	worldChangesCallback: (resource) => `${resource}:admin:worldChanges`
+}, VEHICLE_BAGS = {
+	owned: "ai:owned",
+	id: "ai:vid",
+	props: "ai:props",
+	setup: "ai:setup",
+	fuel: "fuel"
 }, named = new Set();
 function registerExport(name, handler) {
 	named.add(name), globalThis.exports(name, handler);
@@ -262,6 +280,19 @@ function loadLocaleTexts(resource = GetCurrentResourceName()) {
 }
 // ../../../packages/lib/src/fivem/callbackNames.ts
 const requestEvent = (name) => `aicore:cb:${name}`, responseEvent = (resource) => `aicore:cbr:${resource}`;
+// ../../../packages/lib/src/server/position.ts
+function entityCoords(entity) {
+	let [x = 0, y = 0, z = 0] = GetEntityCoords(entity);
+	return {
+		x,
+		y,
+		z
+	};
+}
+function isNear(source, point, metres) {
+	let [x = 0, y = 0, z = 0] = GetEntityCoords(GetPlayerPed(String(source))), dx = x - point.x, dy = y - point.y, dz = z - point.z;
+	return dx * dx + dy * dy + dz * dz <= metres * metres;
+}
 resourceExport(CORE.resource);
 const log$5 = createLogger(GetCurrentResourceName()), gates = new Set();
 on("playerDropped", () => {
@@ -371,7 +402,7 @@ function toPatch(value) {
 		default: return null;
 	}
 }
-const clone = (value) => value === void 0 ? value : JSON.parse(JSON.stringify(value)), core$14 = resourceExport(CORE.resource), ERR = {
+const clone = (value) => value === void 0 ? value : JSON.parse(JSON.stringify(value)), core$15 = resourceExport(CORE.resource), ERR = {
 	type: "ADMIN_ERR_TYPE",
 	range: "ADMIN_ERR_RANGE",
 	length: "ADMIN_ERR_LENGTH",
@@ -385,7 +416,7 @@ const clone = (value) => value === void 0 ? value : JSON.parse(JSON.stringify(va
 		if (cached && Date.now() - cached.at < 2e3) return cached.values.size > 0 ? cached.values : null;
 		let list = [];
 		try {
-			list = core$14.GetLookupValues(source);
+			list = core$15.GetLookupValues(source);
 		} catch {}
 		let values = new Set(Array.isArray(list) ? list.filter((v) => typeof v == "string") : []);
 		return this.lists.set(source, {
@@ -588,7 +619,7 @@ function writeSchema(resource, name, text, log) {
 	(0, node_fs_promises.mkdir)(dir, { recursive: !0 }).then(() => (0, node_fs_promises.writeFile)(`${dir}/${name}.schema.json`, text, "utf8")).catch((error) => log.error(`writing ${resource}/${path} failed`, error));
 }
 // ../../../packages/lib/src/server/admin/panel.ts
-const core$13 = resourceExport(CORE.resource), DEFAULT_KEY = "^[a-z0-9_]{2,32}$";
+const core$14 = resourceExport(CORE.resource), DEFAULT_KEY = "^[a-z0-9_]{2,32}$";
 function imported(spec, value) {
 	let base = clone(spec.newRecord ?? {}), out = {};
 	for (let name of Object.keys(spec.sections)) {
@@ -612,7 +643,7 @@ var AdminPanel = class {
 	constructor(schema) {
 		this.schema = schema;
 		for (let [name, spec] of Object.entries(schema.files)) this.load(name, spec);
-		registerExport("AdminPanelSnapshot", () => this.snapshot()), registerExport("AdminPanelApply", (admin, patch) => this.apply(admin, patch)), onClientCallback(ADMIN.worldChangesCallback(this.resource), () => Object.fromEntries(this.worldChanges)), setImmediate(() => core$13.RegisterAdminPanel(this.resource));
+		registerExport("AdminPanelSnapshot", () => this.snapshot()), registerExport("AdminPanelApply", (admin, patch) => this.apply(admin, patch)), onClientCallback(ADMIN.worldChangesCallback(this.resource), () => Object.fromEntries(this.worldChanges)), setImmediate(() => core$14.RegisterAdminPanel(this.resource));
 	}
 	get(file) {
 		return this.data.get(file) ?? {};
@@ -746,7 +777,7 @@ var AdminPanel = class {
 		let spec = this.schema.files[file], data = this.get(file), value = key === void 0 ? data : data[key] ?? null;
 		this.dataFiles.get(file)?.write(data), this.views.changed(file, key, value);
 		for (let handler of this.handlers.get(file) ?? []) handler(key, value);
-		if (core$13.AdminPanelChanged({
+		if (core$14.AdminPanelChanged({
 			resource: this.resource,
 			file,
 			key,
@@ -776,7 +807,7 @@ function aiLogChannels(channels) {
 }
 resourceExport(CORE.resource);
 // ../../../packages/lib/src/server/online.ts
-const core$11 = resourceExport(CORE.resource);
+const core$12 = resourceExport(CORE.resource);
 var OnlinePlayers = class {
 	players = new Map();
 	onDuty = new Map();
@@ -785,7 +816,7 @@ var OnlinePlayers = class {
 		if (this.started) return;
 		this.started = !0;
 		let load = (source, character) => {
-			this.put(source, character, (core$11.GetJobs(source) ?? []).map((m) => m.job), (core$11.GetGangs(source) ?? []).map((m) => m.gang)), this.setDuty(source, core$11.GetDutyJob(source));
+			this.put(source, character, (core$12.GetJobs(source) ?? []).map((m) => m.job), (core$12.GetGangs(source) ?? []).map((m) => m.gang)), this.setDuty(source, core$12.GetDutyJob(source));
 		};
 		on(CORE.playerLoadedEvent, load), on(CORE.playerUnloadedEvent, (source) => this.drop(source)), on(CORE.jobsChangedEvent, (source, jobs) => {
 			let player = this.players.get(source);
@@ -794,8 +825,8 @@ var OnlinePlayers = class {
 			let player = this.players.get(source);
 			player && (player.gangs = gangs.map((m) => m.gang));
 		}), on(CORE.dutyChangedEvent, (source, job) => this.setDuty(source, job));
-		for (let source of core$11.GetLoadedSources()) {
-			let character = core$11.GetCharacter(source);
+		for (let source of core$12.GetLoadedSources()) {
+			let character = core$12.GetCharacter(source);
 			character && load(source, character);
 		}
 	}
@@ -839,7 +870,39 @@ var OnlinePlayers = class {
 	}
 };
 const EMPTY = new Set();
-new OnlinePlayers(), resourceExport(CORE.resource), resourceExport(CORE.resource), createLogger(GetCurrentResourceName());
+new OnlinePlayers(), resourceExport(CORE.resource);
+// ../../../packages/lib/src/server/vehicle.ts
+function vehicleFromNet(netId) {
+	if (readId(netId) === null) return 0;
+	let entity = NetworkGetEntityFromNetworkId(netId);
+	return entity && DoesEntityExist(entity) && GetEntityType(entity) === 2 ? entity : 0;
+}
+function vehicleNearPlayer(source, netId, options = {}) {
+	let vehicle = vehicleFromNet(netId);
+	if (!vehicle) return 0;
+	let ped = GetPlayerPed(String(source));
+	if (options.driver) return GetPedInVehicleSeat(vehicle, -1) === ped ? vehicle : 0;
+	let [px = 0, py = 0, pz = 0] = GetEntityCoords(ped), [vx = 0, vy = 0, vz = 0] = GetEntityCoords(vehicle);
+	return Math.hypot(vx - px, vy - py, vz - pz) <= (options.metres ?? 5) ? vehicle : 0;
+}
+resourceExport(CORE.resource), createLogger(GetCurrentResourceName());
+const dropped = new Set();
+let listening = !1;
+function onDropped(fn) {
+	listening || (listening = !0, on("playerDropped", () => {
+		let source = Number(globalThis.source);
+		for (let handler of dropped) handler(source);
+	})), dropped.add(fn);
+}
+var PlayerMap = class extends Map {
+	constructor(options = {}) {
+		super(), onDropped((source) => {
+			if (!this.has(source)) return;
+			let value = this.get(source);
+			this.delete(source), options.onDrop?.(source, value);
+		});
+	}
+};
 // ../../../packages/lib/src/server/command.ts
 const resource = GetCurrentResourceName();
 createLogger(resource), new class {
@@ -964,7 +1027,7 @@ var Mirror = class {
 		Player(source).state.set(this.key, value ?? null, !0), this.put(source, value);
 	}
 };
-resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource);
+resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource);
 // resource/common/fuel.ts
 const EVENTS = {
 	consume: "ai-fuel:consume",
@@ -974,20 +1037,27 @@ const EVENTS = {
 	refuel: "ai-fuel:refuel"
 };
 function toNozzle(v) {
-	let r = record(v);
-	return typeof r.x == "number" && typeof r.y == "number" && typeof r.z == "number" ? {
-		x: r.x,
-		y: r.y,
-		z: r.z,
-		netId: typeof r.netId == "number" ? r.netId : null
-	} : void 0;
+	let r = record(v), x = readFinite(r.x), y = readFinite(r.y), z = readFinite(r.z);
+	return x === null || y === null || z === null ? void 0 : {
+		x,
+		y,
+		z,
+		netId: readId(r.netId)
+	};
 }
+const FUEL_BAG = VEHICLE_BAGS.fuel;
 function readSettings(raw) {
-	let s = record(raw), accounts = Array.isArray(s.accounts) ? s.accounts.filter((a) => typeof a == "string") : [];
+	let s = record(raw), accounts = Array.isArray(s.accounts) ? s.accounts.filter((a) => typeof a == "string") : [], blip = record(s.blip);
 	return {
 		consumption: num(s.consumption, 1, 0, 10),
 		accounts: accounts.length ? accounts : ["cash", "bank"],
-		refuelSecondsPerLiter: num(s.refuelSecondsPerLiter, .15, 0, 5)
+		refuelSecondsPerLiter: num(s.refuelSecondsPerLiter, .15, 0, 5),
+		electricModels: Array.isArray(s.electricModels) ? s.electricModels.filter((m) => typeof m == "string").map((m) => m.toLowerCase()) : [...ELECTRIC_MODELS],
+		blip: {
+			sprite: int(blip.sprite, DEFAULT_BLIP.sprite, 0, 1e3),
+			color: int(blip.color, DEFAULT_BLIP.color, 0, 100),
+			scale: num(blip.scale, DEFAULT_BLIP.scale, .3, 2)
+		}
 	};
 }
 function readStations(raw) {
@@ -1007,8 +1077,31 @@ function readStations(raw) {
 	}
 	return out;
 }
-// resource/server/schema.ts
-const fuelSchema = {
+const ELECTRIC_MODELS = [
+	"voltic",
+	"voltic2",
+	"raiden",
+	"cyclone",
+	"tezeract",
+	"neon",
+	"surge",
+	"dilettante",
+	"dilettante2",
+	"imorgon",
+	"khamelion",
+	"iwagen",
+	"omnisegt",
+	"virtue",
+	"caddy",
+	"caddy2",
+	"caddy3",
+	"airtug",
+	"rcbandito"
+], DEFAULT_BLIP = {
+	sprite: 361,
+	color: 1,
+	scale: .6
+}, fuelSchema = {
 	title: "ADMIN_TITLE",
 	icon: "gas-pump",
 	files: {
@@ -1032,7 +1125,42 @@ const fuelSchema = {
 					type: "number",
 					min: 0,
 					max: 5
+				},
+				electricModels: {
+					type: "names",
+					max: 200,
+					itemMax: 32,
+					pattern: "^[a-z0-9_]+$"
+				},
+				blip: {
+					type: "object",
+					fields: {
+						sprite: {
+							type: "number",
+							min: 0,
+							max: 1e3,
+							integer: !0
+						},
+						color: {
+							type: "number",
+							min: 0,
+							max: 100,
+							integer: !0
+						},
+						scale: {
+							type: "number",
+							min: .3,
+							max: 2
+						}
+					}
 				}
+			},
+			defaults: {
+				consumption: 1,
+				accounts: ["cash", "bank"],
+				refuelSecondsPerLiter: .15,
+				electricModels: ELECTRIC_MODELS,
+				blip: DEFAULT_BLIP
 			}
 		},
 		stations: {
@@ -1161,102 +1289,103 @@ const fuelSchema = {
 					label: "ADMIN_F_ACCOUNTS",
 					hint: "ADMIN_H_ACCOUNTS",
 					placeholder: "ADMIN_P_ACCOUNTS"
+				},
+				{
+					widget: "tags",
+					path: "electricModels",
+					label: "ADMIN_F_ELECTRIC",
+					hint: "ADMIN_H_ELECTRIC",
+					placeholder: "ADMIN_P_ELECTRIC"
+				},
+				{
+					widget: "blip",
+					path: "blip",
+					label: "ADMIN_F_BLIP_STYLE",
+					hint: "ADMIN_H_BLIP_STYLE"
 				}
 			]
 		}]
 	}]
-}, core = resourceExport("ai-core"), panel = new AdminPanel(fuelSchema), content = {
-	settings: readSettings(panel.get("settings")),
-	stations: readStations(panel.get("stations"))
-};
-panel.onChange("settings", () => content.settings = readSettings(panel.get("settings"))), panel.onChange("stations", () => content.stations = readStations(panel.get("stations"))), aiLogChannels({ refuels: {} });
-function drivenBy(source, netId) {
-	let vehicle = NetworkGetEntityFromNetworkId(netId);
-	return !vehicle || !DoesEntityExist(vehicle) || GetEntityType(vehicle) !== 2 ? null : GetPedInVehicleSeat(vehicle, -1) === GetPlayerPed(String(source)) ? vehicle : null;
-}
-const fuelState = new EntityState("fuel", stateNumber), fuelOf = (vehicle) => fuelState.get(vehicle) ?? null;
+}, core = resourceExport("ai-core"), panel = new AdminPanel(fuelSchema), settings = panel.view("settings", readSettings), stations = panel.view("stations", readStations);
+aiLogChannels({ refuels: {} });
+const fuelState = new EntityState(FUEL_BAG, stateNumber), fuelOf = (vehicle) => fuelState.get(vehicle) ?? null;
 function persist(vehicle, fuel, before) {
 	if (before !== null && Math.floor(before) === Math.floor(fuel)) return;
 	let api = optionalExport("ai-vehicles"), id = api?.GetVehicleIdByEntity(vehicle);
 	api && id != null && api.SaveVehicle(id, { fuel });
 }
 onClientEvent(EVENTS.consume, {
-	args: ([netId, fuel]) => typeof netId == "number" && typeof fuel == "number" && fuel >= 0 && fuel <= 100 ? [netId, fuel] : null,
+	args: ([netId, fuel]) => {
+		let id = readId(netId), level = readFinite(fuel);
+		return id !== null && level !== null && level >= 0 && level <= 100 ? [id, level] : null;
+	},
 	rate: {
 		count: 2,
 		windowMs: 1e3
 	}
 }, (source, netId, fuel) => {
-	let vehicle = drivenBy(source, netId);
-	if (vehicle === null) return;
+	let vehicle = vehicleNearPlayer(source, netId, { driver: !0 });
+	if (!vehicle) return;
 	let before = fuelOf(vehicle);
 	before !== null && fuel >= before || (fuelState.set(vehicle, fuel), persist(vehicle, fuel, before));
 });
-const nozzles = new Map(), nozzleState = new PlayerState("aiFuelNozzle", toNozzle), setNozzle = (source, nozzle) => {
+const nozzles = new PlayerMap(), nozzleState = new PlayerState("aiFuelNozzle", toNozzle), setNozzle = (source, nozzle) => {
 	nozzle ? nozzles.set(source, nozzle) : nozzles.delete(source), nozzleState.set(source, nozzle);
 };
-on("playerDropped", () => nozzles.delete(Number(globalThis.source)));
-const posOf = (entity) => {
-	let [x = 0, y = 0, z = 0] = GetEntityCoords(entity);
-	return {
-		x,
-		y,
-		z
-	};
-}, dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), stationAt = (pump) => [...content.stations.values()].find((s) => Math.hypot(pump.x - s.x, pump.y - s.y) <= s.radius + 2 && Math.abs(pump.z - s.z) <= 10), pedOf = (source) => GetPlayerPed(String(source));
+function stationAt(pump) {
+	for (let s of stations.value.values()) if (Math.hypot(pump.x - s.x, pump.y - s.y) <= s.radius + 2 && Math.abs(pump.z - s.z) <= 10) return s;
+}
+const NOZZLE_RATE = {
+	count: 1,
+	windowMs: 1e3
+};
 onClientCallback(EVENTS.takeNozzle, {
-	args: ([x, y, z]) => typeof x == "number" && typeof y == "number" && typeof z == "number" ? [
-		x,
-		y,
-		z
-	] : null,
+	args: ([x, y, z]) => {
+		let pump = {
+			x: readFinite(x),
+			y: readFinite(y),
+			z: readFinite(z)
+		};
+		return pump.x === null || pump.y === null || pump.z === null ? null : [{
+			x: pump.x,
+			y: pump.y,
+			z: pump.z
+		}];
+	},
+	rate: NOZZLE_RATE,
 	lock: !0
-}, (source, x, y, z) => {
-	let pump = {
-		x,
-		y,
-		z
-	};
-	return nozzles.has(source) || !stationAt(pump) || dist(posOf(pedOf(source)), pump) > 3 ? {
-		ok: !1,
-		error: "FUEL_ERR_FAR"
-	} : (setNozzle(source, {
-		...pump,
-		netId: null
-	}), { ok: !0 });
-}), onClientCallback(EVENTS.plug, {
-	args: ([netId]) => netId === null || typeof netId == "number" ? [netId] : null,
+}, (source, pump) => nozzles.has(source) || !stationAt(pump) || !isNear(source, pump, 3) ? fail("FUEL_ERR_FAR") : (setNozzle(source, {
+	...pump,
+	netId: null
+}), { ok: !0 })), onClientCallback(EVENTS.plug, {
+	args: ([netId]) => {
+		if (netId === null) return [null];
+		let id = readId(netId);
+		return id === null ? null : [id];
+	},
+	rate: {
+		count: 2,
+		windowMs: 1e3
+	},
 	lock: !0
 }, (source, netId) => {
 	let nozzle = nozzles.get(source);
-	if (!nozzle) return {
-		ok: !1,
-		error: "FUEL_ERR_FAR"
-	};
+	if (!nozzle) return fail("FUEL_ERR_FAR");
 	if (netId !== null) {
-		let vehicle = NetworkGetEntityFromNetworkId(netId);
-		if (!vehicle || GetEntityType(vehicle) !== 2 || dist(posOf(vehicle), posOf(pedOf(source))) > 4 || dist(posOf(vehicle), nozzle) > 10) return {
-			ok: !1,
-			error: "FUEL_ERR_FAR"
-		};
+		let vehicle = vehicleNearPlayer(source, netId, { metres: 4 });
+		if (!vehicle || distance(entityCoords(vehicle), nozzle) > 10) return fail("FUEL_ERR_FAR");
 	}
 	return setNozzle(source, {
 		...nozzle,
 		netId
 	}), { ok: !0 };
-}), onClientEvent(EVENTS.returnNozzle, (source) => setNozzle(source, void 0)), onClientCallback(EVENTS.refuel, (source) => {
-	let nozzle = nozzles.get(source), station = nozzle ? stationAt(nozzle) : void 0, vehicle = nozzle?.netId == null ? 0 : NetworkGetEntityFromNetworkId(nozzle.netId);
-	if (!nozzle || !station || !vehicle || !DoesEntityExist(vehicle) || dist(posOf(vehicle), nozzle) > 10) return {
-		ok: !1,
-		error: "FUEL_ERR_FAR"
-	};
+}), onClientEvent(EVENTS.returnNozzle, (source) => setNozzle(source, void 0), { rate: NOZZLE_RATE }), onClientCallback(EVENTS.refuel, (source) => {
+	let nozzle = nozzles.get(source), station = nozzle ? stationAt(nozzle) : void 0, vehicle = nozzle?.netId == null ? 0 : vehicleFromNet(nozzle.netId);
+	if (!nozzle || !station || !vehicle || distance(entityCoords(vehicle), nozzle) > 10) return fail("FUEL_ERR_FAR");
 	let before = fuelOf(vehicle) ?? 0, liters = Math.floor(100 - before);
-	if (liters <= 0) return {
-		ok: !1,
-		error: "FUEL_ERR_FULL"
-	};
+	if (liters <= 0) return fail("FUEL_ERR_FULL");
 	let price = Math.ceil(liters * station.price);
-	return content.settings.accounts.some((account) => core.RemoveMoney(source, account, price, `fuel:${station.id}`)) ? (fuelState.set(vehicle, 100), persist(vehicle, 100, null), aiLog("refuels", `refuelled ${liters} for $${price} at ${station.id}`, {
+	return settings.value.accounts.some((account) => core.RemoveMoney(source, account, price, `fuel:${station.id}`)) ? (fuelState.set(vehicle, 100), persist(vehicle, 100, null), aiLog("refuels", `refuelled ${liters} for $${price} at ${station.id}`, {
 		source,
 		metadata: {
 			station: station.id,
@@ -1266,8 +1395,5 @@ onClientCallback(EVENTS.takeNozzle, {
 	}), {
 		ok: !0,
 		price
-	}) : {
-		ok: !1,
-		error: "FUEL_ERR_MONEY"
-	};
+	}) : fail("FUEL_ERR_MONEY");
 }, { lock: !0 });

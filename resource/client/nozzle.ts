@@ -1,5 +1,6 @@
 import { PlayerState, requestModel } from "@aicore-fivem/lib/client";
 import { waitFor } from "@aicore-fivem/lib/shared";
+import { ResourceName } from "common";
 import { NOZZLE_BAG, PUMP_MODELS, toNozzle, type Nozzle } from "common/fuel";
 import { addHose, attachToHand, attachToVehicle } from "./placement";
 
@@ -36,21 +37,44 @@ function pumpAt(n: Nozzle): number {
  */
 class NozzleView {
   private readonly drawn = new Map<number, Drawn>();
+  /** Holders whose ped is not here (out of scope): drawn again when it comes back. */
+  private readonly waiting = new Set<number>();
+  private sweeper: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly state: PlayerState<Nozzle>) {
     state.onChange((serverId, nozzle) => void this.update(serverId, nozzle));
-    // A holder who leaves this player's scope takes the ped away: drop what was drawn for them.
-    setInterval(() => {
-      for (const [id, d] of this.drawn) {
-        const ped = GetPlayerPed(GetPlayerFromServerId(id));
-        if (!ped || !DoesEntityExist(ped) || !DoesEntityExist(d.prop))
-          this.clear(id);
-      }
-    }, 1000);
     on("onResourceStop", (resource: string) => {
-      if (resource === GetCurrentResourceName())
-        for (const id of [...this.drawn.keys()]) this.clear(id);
+      if (resource === ResourceName)
+        for (const id of this.drawn.keys()) this.clear(id);
     });
+  }
+
+  /** Once a second while anything is drawn or waiting: a holder who left scope takes the ped away, one who came back is drawn. */
+  private sweep(): void {
+    for (const [id, d] of this.drawn) {
+      const ped = GetPlayerPed(GetPlayerFromServerId(id));
+      if (ped && DoesEntityExist(ped) && DoesEntityExist(d.prop)) continue;
+      this.clear(id);
+      if (this.state.get(id)) this.waiting.add(id);
+    }
+    for (const id of this.waiting) {
+      const nozzle = this.state.get(id);
+      if (!nozzle) this.waiting.delete(id);
+      else if (DoesEntityExist(GetPlayerPed(GetPlayerFromServerId(id))))
+        void this.update(id, nozzle);
+    }
+    this.watch();
+  }
+
+  /** Starts or stops the sweep timer. */
+  private watch(): void {
+    const needed = this.drawn.size > 0 || this.waiting.size > 0;
+    if (needed && this.sweeper === undefined)
+      this.sweeper = setInterval(() => this.sweep(), 1000);
+    else if (!needed && this.sweeper !== undefined) {
+      clearInterval(this.sweeper);
+      this.sweeper = undefined;
+    }
   }
 
   private async update(
@@ -58,7 +82,11 @@ class NozzleView {
     nozzle: Nozzle | undefined,
   ): Promise<void> {
     const before = this.drawn.get(serverId);
-    if (!nozzle) return this.clear(serverId);
+    this.waiting.delete(serverId);
+    if (!nozzle) {
+      this.clear(serverId);
+      return this.watch();
+    }
     if (
       before &&
       before.nozzle.x === nozzle.x &&
@@ -70,7 +98,10 @@ class NozzleView {
     }
     this.clear(serverId);
     const ped = GetPlayerPed(GetPlayerFromServerId(serverId));
-    if (!ped || !DoesEntityExist(ped)) return;
+    if (!ped || !DoesEntityExist(ped)) {
+      this.waiting.add(serverId);
+      return this.watch();
+    }
     const hash = await requestModel(NOZZLE_MODEL).catch(() => 0);
     if (!hash || this.state.get(serverId) !== nozzle) return;
     const [x = 0, y = 0, z = 0] = GetEntityCoords(ped, false);
@@ -79,6 +110,7 @@ class NozzleView {
     SetEntityCollision(prop, false, false);
     const d: Drawn = { nozzle, prop, rope: 0 };
     this.drawn.set(serverId, d);
+    this.watch();
     this.attach(serverId, d);
     await this.hose(serverId, d);
   }

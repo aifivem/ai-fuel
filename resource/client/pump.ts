@@ -3,15 +3,11 @@ import {
   callAction,
   EntityState,
   every,
-  hidePrompt,
-  nearestVehicle,
   notify,
   onCache,
-  onPromptPressed,
   player,
   Points,
   progress,
-  showPrompt,
   stateNumber,
 } from "@aicore-fivem/lib/client";
 import { readFinite } from "@aicore-fivem/lib/shared";
@@ -21,7 +17,6 @@ import { nozzles } from "./nozzle";
 import { fuelCap } from "./placement";
 
 const fuelState = new EntityState(FUEL_BAG, stateNumber);
-const PROMPT = "refuel";
 let secondsPerLiter = 0.25;
 
 /** Settings the pump flow needs (set by the client entry). */
@@ -57,13 +52,19 @@ points.addModel("pump", {
 });
 onCache("vehicle", () => points.refresh());
 
-const vehicleInReach = () => nearestVehicle(3, { notOwn: true });
+/** The refuel point on vehicles: only while a nozzle is held (the vehicle scan runs only then). */
+function setRefuelPoint(on: boolean): void {
+  if (!on) return points.remove("refuel");
+  points.addVehicle("refuel", {
+    label: Locale("FUEL_PROMPT_REFUEL"),
+    icon: "gas-pump",
+    radius: 3,
+    canShow: () => cache.vehicle === false && holding()?.netId === null,
+    onPressed: (vehicle) => refuel(vehicle),
+  });
+}
 
-/**
- * While the player holds a nozzle (the job runs only then): the refuel prompt at a vehicle in reach, and the nozzle
- * goes back by itself when the player walks further than the hose reaches or gets into a vehicle.
- */
-let target = 0;
+/** While the player holds a nozzle: it goes back by itself past the hose's reach or in a vehicle. */
 function watch(): void {
   const nozzle = holding();
   if (!nozzle) return;
@@ -71,30 +72,14 @@ function watch(): void {
     emitNet(EVENTS.returnNozzle);
     return notify(Locale("FUEL_HOSE_END"), "info");
   }
-  const vehicle = nozzle.netId === null ? vehicleInReach() : 0;
-  if (vehicle === target) return;
-  target = vehicle;
-  if (vehicle) showPrompt(PROMPT, Locale("FUEL_PROMPT_REFUEL"));
-  else hidePrompt(PROMPT);
 }
 const watcher = every(250, watch, { active: false, name: "nozzle" });
 nozzles.onChange((id) => {
   if (id !== cache.serverId) return;
   points.refresh();
-  if (holding()) {
-    watcher.set(true);
-    return;
-  }
-  watcher.set(false);
-  if (target) hidePrompt(PROMPT);
-  target = 0;
-});
-
-let busy = false;
-onPromptPressed((id) => {
-  if (id !== PROMPT || busy || !target) return;
-  busy = true;
-  void refuel(target).finally(() => (busy = false));
+  const held = holding() !== undefined;
+  watcher.set(held);
+  setRefuelPoint(held);
 });
 
 async function refuel(vehicle: number): Promise<void> {
@@ -106,7 +91,6 @@ async function refuel(vehicle: number): Promise<void> {
     FAR,
   );
   if (!plugged) return;
-  hidePrompt(PROMPT);
   // Face the cap and push the nozzle in; the player is free while the tank fills.
   const cap = fuelCap(vehicle);
   if (cap) TaskTurnPedToFaceCoord(cache.ped, cap.x, cap.y, cap.z, 1000);

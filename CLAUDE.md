@@ -5,14 +5,16 @@ Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag 
 ## Decisions
 
 - Only the driver's client burns fuel (1 s timer from rpm and vehicle class, `common/fuel.ts`), applies it to the game and reports it every 5 s; the server takes only lower values and writes the state bag. Bicycles and electric models burn nothing.
-- Refuelling: each station is a lib `Points` entry (sphere of its radius) offered only to a driver (`canShow`, refreshed on `onCache("seat")`); the client plays the progress (time per percent), then the server checks distance, charges the accounts in order and fills the bag.
-- Stations are panel records (27 defaults converted from ox_fuel's station list, GPL-3.0).
+- Refuelling happens at the map's pump models (a lib `Points` model point, on foot): the player takes the nozzle, plugs it into a vehicle within the hose's reach (8 m from the pump), the client plays the progress (time per litre), then the server checks the nozzle, the pump's station and the distance, charges the accounts in order and fills the bag. Walking past the hose's end or getting into a vehicle hangs the nozzle back up.
+- The nozzle and hose are shown to everyone near: the server keeps who holds which pump's nozzle in memory and in the player state `aiFuelNozzle` (`{ x, y, z, netId }`), and every client draws a local nozzle prop (hand, or the vehicle's `petrolcap` bone) and a rope from the pump object (`client/nozzle.ts`). Nothing is networked.
+- Stations (panel records) give the price and the blip, and decide which pumps sell fuel.
+- Station defaults (27) are converted from ox_fuel's station list (GPL-3.0).
 
 ## Contracts
 
-- Events: `resource/common/fuel.ts`. State bag `fuel` on vehicles. Owned vehicles' fuel goes to ai-vehicles `SaveVehicle` when the whole number changes.
+- Events: `resource/common/fuel.ts`. State bag `fuel` on vehicles, player state `aiFuelNozzle`. Owned vehicles' fuel goes to ai-vehicles `SaveVehicle` when the whole number changes.
 
 ## Entry points
 
 - Server: consume and refuel `resource/server/index.ts`; panel `server/schema.ts`.
-- Client: burner and stations `resource/client/index.ts`.
+- Client: burner and station blips `resource/client/index.ts`, pump flow `client/pump.ts`, nozzle and hose drawing `client/nozzle.ts`.

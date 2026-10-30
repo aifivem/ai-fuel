@@ -5,9 +5,50 @@ import { bool, num, record, str } from "@aicore-fivem/lib/shared";
 export const EVENTS = {
   /** Client -> server: (netId, fuel) the driver's vehicle burned fuel (only lower values are taken). */
   consume: "ai-fuel:consume",
-  /** Callback: (netId, stationId) -> { ok } fill the tank at a station (after the client's progress). */
+  /** Callback: (pumpX, pumpY, pumpZ) -> { ok } take the nozzle of the pump the player stands at. */
+  takeNozzle: "ai-fuel:takeNozzle",
+  /** Callback: (netId | null) -> { ok } put the held nozzle into a vehicle (null: back into the hand). */
+  plug: "ai-fuel:plug",
+  /** Client -> server: () hang the nozzle back on its pump. */
+  returnNozzle: "ai-fuel:returnNozzle",
+  /** Callback: () -> { ok, price } fill the tank the held nozzle is in (after the client's progress). */
   refuel: "ai-fuel:refuel",
 } as const;
+
+/** Player state: the nozzle a player holds, `{ x, y, z, netId }` (its pump, the vehicle it is in or null). */
+export const NOZZLE_BAG = "aiFuelNozzle";
+export interface Nozzle {
+  x: number;
+  y: number;
+  z: number;
+  netId: number | null;
+}
+export function toNozzle(v: unknown): Nozzle | undefined {
+  const r = record(v);
+  return typeof r.x === "number" &&
+    typeof r.y === "number" &&
+    typeof r.z === "number"
+    ? {
+        x: r.x,
+        y: r.y,
+        z: r.z,
+        netId: typeof r.netId === "number" ? r.netId : null,
+      }
+    : undefined;
+}
+
+/** Map pump models: the nozzle is taken from these. */
+export const PUMP_MODELS = [
+  "prop_gas_pump_1a",
+  "prop_gas_pump_1b",
+  "prop_gas_pump_1c",
+  "prop_gas_pump_1d",
+  "prop_gas_pump_old2",
+  "prop_gas_pump_old3",
+  "prop_vintage_pump",
+] as const;
+/** How far the hose reaches from its pump, in metres. */
+export const HOSE_LENGTH = 8;
 
 /** The vehicle state bag holding fuel 0-100 (ai-vehicles seeds it on spawn, ai-hud shows it). */
 export const FUEL_BAG = "fuel";

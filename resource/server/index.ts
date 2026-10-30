@@ -1,5 +1,25 @@
-import { AdminPanel, aiLog, aiLogChannels, EntityState, onClientCallback, onClientEvent, optionalExport, resourceExport, stateNumber } from "@aicore-fivem/lib/server";
-import { EVENTS, FUEL_BAG, readSettings, readStations } from "common/fuel";
+import {
+  AdminPanel,
+  aiLog,
+  aiLogChannels,
+  EntityState,
+  onClientCallback,
+  onClientEvent,
+  optionalExport,
+  PlayerState,
+  resourceExport,
+  stateNumber,
+} from "@aicore-fivem/lib/server";
+import {
+  EVENTS,
+  FUEL_BAG,
+  HOSE_LENGTH,
+  NOZZLE_BAG,
+  readSettings,
+  readStations,
+  toNozzle,
+  type Nozzle,
+} from "common/fuel";
 import { fuelSchema } from "./schema";
 
 const core = resourceExport("ai-core");
@@ -30,7 +50,8 @@ function drivenBy(source: number, netId: number): number | null {
 }
 
 const fuelState = new EntityState(FUEL_BAG, stateNumber);
-const fuelOf = (vehicle: number): number | null => fuelState.get(vehicle) ?? null;
+const fuelOf = (vehicle: number): number | null =>
+  fuelState.get(vehicle) ?? null;
 
 /** Owned vehicles keep their fuel in ai-vehicles (saved whenever the whole number changes). */
 function persist(vehicle: number, fuel: number, before: number | null): void {
@@ -63,27 +84,93 @@ onClientEvent(
   },
 );
 
+/** Who holds which pump's nozzle (memory is the truth; the player state shows it to everyone near). */
+const nozzles = new Map<number, Nozzle>();
+const nozzleState = new PlayerState(NOZZLE_BAG, toNozzle);
+const setNozzle = (source: number, nozzle: Nozzle | undefined) => {
+  if (nozzle) nozzles.set(source, nozzle);
+  else nozzles.delete(source);
+  nozzleState.set(source, nozzle);
+};
+on("playerDropped", () => nozzles.delete(Number(globalThis.source)));
+
+type Vec = { x: number; y: number; z: number };
+const posOf = (entity: number): Vec => {
+  const [x = 0, y = 0, z = 0] = GetEntityCoords(entity);
+  return { x, y, z };
+};
+const dist = (a: Vec, b: Vec) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+/** The station a pump stands in. */
+const stationAt = (pump: Vec) =>
+  [...content.stations.values()].find(
+    (s) =>
+      Math.hypot(pump.x - s.x, pump.y - s.y) <= s.radius + 2 &&
+      Math.abs(pump.z - s.z) <= 10,
+  );
+const pedOf = (source: number) => GetPlayerPed(String(source));
+
 onClientCallback(
-  EVENTS.refuel,
+  EVENTS.takeNozzle,
   {
-    args: ([netId, station]) =>
-      typeof netId === "number" && typeof station === "string"
-        ? [netId, station]
+    args: ([x, y, z]) =>
+      typeof x === "number" && typeof y === "number" && typeof z === "number"
+        ? [x, y, z]
         : null,
     lock: true,
   },
-  (source, netId, stationId) => {
-    const station = content.stations.get(stationId);
-    const vehicle = NetworkGetEntityFromNetworkId(netId);
-    if (!station || !vehicle || !DoesEntityExist(vehicle))
-      return { ok: false, error: "FUEL_ERR_FAR" };
-    const [x = 0, y = 0, z = 0] = GetEntityCoords(vehicle);
-    const [px = 0, py = 0, pz = 0] = GetEntityCoords(
-      GetPlayerPed(String(source)),
-    );
+  (source, x, y, z) => {
+    const pump = { x, y, z };
     if (
-      Math.hypot(x - station.x, y - station.y) > station.radius + 2 ||
-      Math.hypot(px - x, py - y, pz - z) > 6
+      nozzles.has(source) ||
+      !stationAt(pump) ||
+      dist(posOf(pedOf(source)), pump) > 3
+    )
+      return { ok: false, error: "FUEL_ERR_FAR" };
+    setNozzle(source, { ...pump, netId: null });
+    return { ok: true };
+  },
+);
+
+onClientCallback(
+  EVENTS.plug,
+  {
+    args: ([netId]) =>
+      netId === null || typeof netId === "number" ? [netId] : null,
+    lock: true,
+  },
+  (source, netId) => {
+    const nozzle = nozzles.get(source);
+    if (!nozzle) return { ok: false, error: "FUEL_ERR_FAR" };
+    if (netId !== null) {
+      const vehicle = NetworkGetEntityFromNetworkId(netId);
+      if (
+        !vehicle ||
+        GetEntityType(vehicle) !== 2 ||
+        dist(posOf(vehicle), posOf(pedOf(source))) > 4 ||
+        dist(posOf(vehicle), nozzle) > HOSE_LENGTH + 2
+      )
+        return { ok: false, error: "FUEL_ERR_FAR" };
+    }
+    setNozzle(source, { ...nozzle, netId });
+    return { ok: true };
+  },
+);
+
+onClientEvent(EVENTS.returnNozzle, (source) => setNozzle(source, undefined));
+
+onClientCallback(
+  EVENTS.refuel,
+  (source) => {
+    const nozzle = nozzles.get(source);
+    const station = nozzle ? stationAt(nozzle) : undefined;
+    const vehicle =
+      nozzle?.netId != null ? NetworkGetEntityFromNetworkId(nozzle.netId) : 0;
+    if (
+      !nozzle ||
+      !station ||
+      !vehicle ||
+      !DoesEntityExist(vehicle) ||
+      dist(posOf(vehicle), nozzle) > HOSE_LENGTH + 2
     )
       return { ok: false, error: "FUEL_ERR_FAR" };
     const before = fuelOf(vehicle) ?? 0;
@@ -104,4 +191,5 @@ onClientCallback(
     });
     return { ok: true, price };
   },
+  { lock: true },
 );

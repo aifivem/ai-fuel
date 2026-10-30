@@ -1,4 +1,12 @@
-import { AdminWorld, cache, EntityState, loadLocaleTexts, notify, onCache, Points, progress, stateNumber, triggerServerCallback } from "@aicore-fivem/lib/client";
+import {
+  AdminWorld,
+  Blips,
+  cache,
+  EntityState,
+  loadLocaleTexts,
+  onCache,
+  stateNumber,
+} from "@aicore-fivem/lib/client";
 import { Locale } from "common";
 import {
   burnPerSecond,
@@ -8,6 +16,8 @@ import {
   readSettings,
   readStations,
 } from "common/fuel";
+
+import { configurePump } from "./pump";
 
 const fuelState = new EntityState(FUEL_BAG, stateNumber);
 
@@ -82,68 +92,25 @@ onCache("seat", (seat) =>
 );
 if (cache.seat === -1 && cache.vehicle !== false) burner.start(cache.vehicle);
 
-async function refuel(stationId: string): Promise<void> {
-  const vehicle = cache.vehicle;
-  if (vehicle === false || cache.seat !== -1)
-    return notify(Locale("FUEL_ERR_NO_VEHICLE"), "error");
-  const missing = 100 - (fuelState.get(vehicle) ?? 100);
-  if (missing < 1) return notify(Locale("FUEL_ERR_FULL"), "info");
-  SetVehicleEngineOn(vehicle, false, true, true);
-  const done = await progress({
-    label: Locale("FUEL_REFUELING"),
-    duration: Math.max(
-      1000,
-      missing * burner.settings.refuelSecondsPerLiter * 1000,
-    ),
-    allowVehicle: true,
-  });
-  if (!done) return;
-  const result: unknown = await triggerServerCallback(EVENTS.refuel, [
-    NetworkGetNetworkIdFromEntity(vehicle),
-    stationId,
-  ]).catch(() => null);
-  if (
-    typeof result === "object" &&
-    result !== null &&
-    "ok" in result &&
-    result.ok === true
-  ) {
-    const price =
-      "price" in result && typeof result.price === "number" ? result.price : 0;
-    notify(Locale("FUEL_PAID", price), "success");
-  } else {
-    const error =
-      typeof result === "object" &&
-      result !== null &&
-      "error" in result &&
-      typeof result.error === "string"
-        ? result.error
-        : "FUEL_ERR_FAR";
-    notify(texts[error] ?? error, "error");
-  }
-}
+configurePump(burner.settings.refuelSecondsPerLiter, texts);
+world.onChange("settings", () =>
+  configurePump(burner.settings.refuelSecondsPerLiter, texts),
+);
 
-/** Stations: a point each, offered to the driver inside its radius, and a blip. */
-const points = new Points();
+/** Station blips; refuelling itself happens at the map's pumps (`pump.ts`). */
+const blips = new Blips();
 function rebuild(): void {
-  points.clear();
-  for (const station of readStations(world.get("stations")).values()) {
-    points.add(`station:${station.id}`, {
-      coords: { x: station.x, y: station.y, z: station.z },
-      label: Locale("FUEL_PROMPT", station.price),
-      icon: "gas-pump",
-      radius: station.radius,
-      height: 8,
-      promptOnly: true,
-      canShow: () => cache.vehicle !== false && cache.seat === -1,
-      blip: station.blip
-        ? { sprite: 361, color: 1, scale: 0.6, label: station.label }
-        : undefined,
-      onPressed: () => refuel(station.id),
-    });
-  }
+  blips.clear();
+  for (const station of readStations(world.get("stations")).values())
+    if (station.blip)
+      blips.add(station.id, {
+        coords: { x: station.x, y: station.y, z: station.z },
+        sprite: 361,
+        color: 1,
+        scale: 0.6,
+        label: station.label,
+      });
 }
 
 rebuild();
 world.onChange("stations", rebuild);
-onCache("seat", () => points.refresh());

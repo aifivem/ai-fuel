@@ -9,7 +9,6 @@ import {
 } from "@aicore-fivem/lib/client";
 import { Locale } from "common";
 import {
-  burnPerSecond,
   ELECTRIC,
   EVENTS,
   FUEL_BAG,
@@ -24,25 +23,51 @@ const fuelState = new EntityState(FUEL_BAG, stateNumber);
 const world = new AdminWorld(["settings", "stations"]);
 const texts = loadLocaleTexts();
 
+/** Game consumption per settings unit: at 1 a full tank lasts about 25 minutes of mixed driving. */
+const RATE = 10;
+
 /**
- * Fuel of the vehicle the player drives: burned on a 1 s timer from the engine's rpm, applied to the game, reported to
- * the server every 5 s (the server keeps the `fuel` state bag). Nothing runs on foot or as a passenger.
+ * Fuel of the vehicle the player drives: the game burns it (FiveM fuel consumption: rpm x the vehicle's handling rate
+ * x the global rate), the tank's level is mirrored from the `fuel` state bag on entering and after a refuel, and lower
+ * levels are reported to the server every 5 s. Electric models and vehicles with no tank burn nothing.
  */
 class Burner {
   settings = readSettings(world.get("settings"));
   private timer: ReturnType<typeof setInterval> | null = null;
-  private fuel = 100;
+  private tank = 0;
   private reported = 100;
   private ticks = 0;
+
+  constructor() {
+    SetFuelConsumptionState(true);
+    this.applyRate();
+  }
+
+  applyRate(): void {
+    SetFuelConsumptionRateMultiplier(this.settings.consumption * RATE);
+  }
 
   start(vehicle: number): void {
     this.stop();
     const model = GetDisplayNameFromVehicleModel(
       GetEntityModel(vehicle),
     ).toLowerCase();
-    if (ELECTRIC.has(model)) return;
-    this.fuel = fuelState.get(vehicle) ?? 100;
-    this.reported = this.fuel;
+    this.tank = GetVehicleHandlingFloat(
+      vehicle,
+      "CHandlingData",
+      "fPetrolTankVolume",
+    );
+    if (ELECTRIC.has(model))
+      SetVehicleHandlingFloat(
+        vehicle,
+        "CHandlingData",
+        "fPetrolConsumptionRate",
+        0,
+      );
+    if (ELECTRIC.has(model) || this.tank <= 0) return;
+    const fuel = fuelState.get(vehicle) ?? 100;
+    SetVehicleFuelLevel(vehicle, (fuel / 100) * this.tank);
+    this.reported = fuel;
     this.timer = setInterval(() => this.tick(vehicle), 1000);
   }
 
@@ -53,38 +78,30 @@ class Burner {
 
   private tick(vehicle: number): void {
     if (cache.vehicle !== vehicle || cache.seat !== -1) return this.stop();
-    // A refuel or another driver may have changed the bag.
+    let fuel = (GetVehicleFuelLevel(vehicle) / this.tank) * 100;
+    // A refuel or another driver may have raised the bag.
     const bag = fuelState.get(vehicle);
-    if (bag !== undefined && bag > this.fuel + 0.5)
-      this.fuel = this.reported = bag;
-    if (GetIsVehicleEngineRunning(vehicle))
-      this.fuel = Math.max(
-        0,
-        this.fuel -
-          burnPerSecond(
-            GetVehicleCurrentRpm(vehicle),
-            GetVehicleClass(vehicle),
-            this.settings.consumption,
-          ),
-      );
-    if (this.fuel <= 0) SetVehicleEngineOn(vehicle, false, true, true);
-    SetVehicleFuelLevel(vehicle, Math.max(this.fuel, 1) * 0.65);
-    if (++this.ticks % 5 === 0 && this.reported - this.fuel >= 0.1) {
-      this.reported = this.fuel;
+    if (bag !== undefined && bag > fuel + 0.5) {
+      SetVehicleFuelLevel(vehicle, (bag / 100) * this.tank);
+      fuel = this.reported = bag;
+    }
+    if (fuel <= 0) SetVehicleEngineOn(vehicle, false, true, true);
+    if (++this.ticks % 5 === 0 && this.reported - fuel >= 0.1) {
+      this.reported = fuel;
       emitNet(
         EVENTS.consume,
         NetworkGetNetworkIdFromEntity(vehicle),
-        Math.round(this.fuel * 100) / 100,
+        Math.round(Math.max(0, fuel) * 100) / 100,
       );
     }
   }
 }
 
 const burner = new Burner();
-world.onChange(
-  "settings",
-  () => (burner.settings = readSettings(world.get("settings"))),
-);
+world.onChange("settings", () => {
+  burner.settings = readSettings(world.get("settings"));
+  burner.applyRate();
+});
 onCache("seat", (seat) =>
   seat === -1 && cache.vehicle !== false
     ? burner.start(cache.vehicle)

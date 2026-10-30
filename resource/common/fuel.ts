@@ -103,26 +103,6 @@ export function readStations(raw: unknown): Map<string, Station> {
   return out;
 }
 
-/** Fuel burned per second: idle trickle plus load from the engine's rpm, scaled by the vehicle class. */
-export function burnPerSecond(
-  rpm: number,
-  vehicleClass: number,
-  multiplier: number,
-): number {
-  // Classes: 13 cycles burn nothing, 8 motorcycles less, 10 / 20 industrial and commercial more, 15 / 16 air more.
-  const classFactor =
-    vehicleClass === 13
-      ? 0
-      : vehicleClass === 8
-        ? 0.6
-        : vehicleClass === 10 || vehicleClass === 20
-          ? 1.4
-          : vehicleClass === 15 || vehicleClass === 16
-            ? 1.8
-            : 1;
-  return (0.01 + rpm * rpm * 0.12) * classFactor * multiplier;
-}
-
 /** Electric models: no fuel use (no charging stations yet). */
 export const ELECTRIC = new Set([
   "voltic",

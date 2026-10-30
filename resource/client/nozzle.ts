@@ -1,4 +1,4 @@
-import { PlayerState, requestModel } from "@aicore-fivem/lib/client";
+import { every, PlayerState, requestModel } from "@aicore-fivem/lib/client";
 import { waitFor } from "@aicore-fivem/lib/shared";
 import { ResourceName } from "common";
 import { NOZZLE_BAG, PUMP_MODELS, toNozzle, type Nozzle } from "common/fuel";
@@ -39,7 +39,10 @@ class NozzleView {
   private readonly drawn = new Map<number, Drawn>();
   /** Holders whose ped is not here (out of scope): drawn again when it comes back. */
   private readonly waiting = new Set<number>();
-  private sweeper: ReturnType<typeof setInterval> | undefined;
+  private readonly sweeper = every(1000, () => this.sweep(), {
+    active: false,
+    name: "nozzleSweep",
+  });
 
   constructor(private readonly state: PlayerState<Nozzle>) {
     state.onChange((serverId, nozzle) => void this.update(serverId, nozzle));
@@ -66,15 +69,9 @@ class NozzleView {
     this.watch();
   }
 
-  /** Starts or stops the sweep timer. */
+  /** Starts or stops the sweep job. */
   private watch(): void {
-    const needed = this.drawn.size > 0 || this.waiting.size > 0;
-    if (needed && this.sweeper === undefined)
-      this.sweeper = setInterval(() => this.sweep(), 1000);
-    else if (!needed && this.sweeper !== undefined) {
-      clearInterval(this.sweeper);
-      this.sweeper = undefined;
-    }
+    this.sweeper.set(this.drawn.size > 0 || this.waiting.size > 0);
   }
 
   private async update(

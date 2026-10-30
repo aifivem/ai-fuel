@@ -2,6 +2,7 @@ import {
   cache,
   callAction,
   EntityState,
+  every,
   hidePrompt,
   nearestVehicle,
   notify,
@@ -59,11 +60,10 @@ onCache("vehicle", () => points.refresh());
 const vehicleInReach = () => nearestVehicle(3, { notOwn: true });
 
 /**
- * While the player holds a nozzle (the timer runs only then): the refuel prompt at a vehicle in reach, and the nozzle
+ * While the player holds a nozzle (the job runs only then): the refuel prompt at a vehicle in reach, and the nozzle
  * goes back by itself when the player walks further than the hose reaches or gets into a vehicle.
  */
 let target = 0;
-let watcher: ReturnType<typeof setInterval> | undefined;
 function watch(): void {
   const nozzle = holding();
   if (!nozzle) return;
@@ -77,15 +77,15 @@ function watch(): void {
   if (vehicle) showPrompt(PROMPT, Locale("FUEL_PROMPT_REFUEL"));
   else hidePrompt(PROMPT);
 }
+const watcher = every(250, watch, { active: false, name: "nozzle" });
 nozzles.onChange((id) => {
   if (id !== cache.serverId) return;
   points.refresh();
   if (holding()) {
-    watcher ??= setInterval(watch, 250);
+    watcher.set(true);
     return;
   }
-  if (watcher !== undefined) clearInterval(watcher);
-  watcher = undefined;
+  watcher.set(false);
   if (target) hidePrompt(PROMPT);
   target = 0;
 });

@@ -3,6 +3,8 @@ import {
   Blips,
   cache,
   EntityState,
+  every,
+  type Job,
   onCache,
   stateNumber,
 } from "@aicore-fivem/lib/client";
@@ -25,7 +27,7 @@ const RATE = 10;
 class Burner {
   settings = readSettings(world.get("settings"));
   private electric = new Set<number>();
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private timer: Job | null = null;
   private tank = 0;
   private reported = 100;
   private ticks = 0;
@@ -61,11 +63,11 @@ class Burner {
     const fuel = fuelState.get(vehicle) ?? 100;
     SetVehicleFuelLevel(vehicle, (fuel / 100) * this.tank);
     this.reported = fuel;
-    this.timer = setInterval(() => this.tick(vehicle), 1000);
+    this.timer = every(1000, () => this.tick(vehicle), { name: "burn" });
   }
 
   stop(): void {
-    if (this.timer) clearInterval(this.timer);
+    this.timer?.stop();
     this.timer = null;
   }
 

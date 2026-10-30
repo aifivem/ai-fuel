@@ -10,7 +10,7 @@
   "ADMIN_TAB_STATIONS": "Gas stations",
   "ADMIN_TAB_STATIONS_DESC": "Where players refuel and what it costs.",
   "ADMIN_NEW_STATION": "New station",
-  "ADMIN_DELETE_STATION": "Delete this station?",
+  "ADMIN_DELETE_STATION": "Delete station",
   "ADMIN_C_STATION": "Station",
   "ADMIN_C_STATION_DESC": "Players drive inside the area and press the interaction key to fill the tank.",
   "ADMIN_F_LABEL": "Name",

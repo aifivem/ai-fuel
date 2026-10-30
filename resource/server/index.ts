@@ -1,12 +1,4 @@
-import {
-  AdminPanel,
-  aiLog,
-  aiLogChannels,
-  onClientCallback,
-  onClientEvent,
-  optionalExport,
-  resourceExport,
-} from "@aicore-fivem/lib/server";
+import { AdminPanel, aiLog, aiLogChannels, EntityState, onClientCallback, onClientEvent, optionalExport, resourceExport, stateNumber } from "@aicore-fivem/lib/server";
 import { EVENTS, FUEL_BAG, readSettings, readStations } from "common/fuel";
 import { fuelSchema } from "./schema";
 
@@ -37,10 +29,8 @@ function drivenBy(source: number, netId: number): number | null {
     : null;
 }
 
-const fuelOf = (vehicle: number): number | null => {
-  const value: unknown = Entity(vehicle).state[FUEL_BAG];
-  return typeof value === "number" ? value : null;
-};
+const fuelState = new EntityState(FUEL_BAG, stateNumber);
+const fuelOf = (vehicle: number): number | null => fuelState.get(vehicle) ?? null;
 
 /** Owned vehicles keep their fuel in ai-vehicles (saved whenever the whole number changes). */
 function persist(vehicle: number, fuel: number, before: number | null): void {
@@ -68,7 +58,7 @@ onClientEvent(
     const before = fuelOf(vehicle);
     // Fuel only goes down from the client; a vehicle without the bag starts from what its driver saw.
     if (before !== null && fuel >= before) return;
-    Entity(vehicle).state.set(FUEL_BAG, fuel, true);
+    fuelState.set(vehicle, fuel);
     persist(vehicle, fuel, before);
   },
 );
@@ -106,7 +96,7 @@ onClientCallback(
       )
     )
       return { ok: false, error: "FUEL_ERR_MONEY" };
-    Entity(vehicle).state.set(FUEL_BAG, 100, true);
+    fuelState.set(vehicle, 100);
     persist(vehicle, 100, null);
     aiLog("refuels", `refuelled ${liters} for $${price} at ${station.id}`, {
       source,

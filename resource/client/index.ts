@@ -1,13 +1,4 @@
-import {
-  AdminWorld,
-  cache,
-  loadLocaleTexts,
-  notify,
-  onCache,
-  Points,
-  progress,
-  triggerServerCallback,
-} from "@aicore-fivem/lib/client";
+import { AdminWorld, cache, EntityState, loadLocaleTexts, notify, onCache, Points, progress, stateNumber, triggerServerCallback } from "@aicore-fivem/lib/client";
 import { Locale } from "common";
 import {
   burnPerSecond,
@@ -17,6 +8,8 @@ import {
   readSettings,
   readStations,
 } from "common/fuel";
+
+const fuelState = new EntityState(FUEL_BAG, stateNumber);
 
 const world = new AdminWorld(["settings", "stations"]);
 const texts = loadLocaleTexts();
@@ -38,8 +31,7 @@ class Burner {
       GetEntityModel(vehicle),
     ).toLowerCase();
     if (ELECTRIC.has(model)) return;
-    const bag: unknown = Entity(vehicle).state[FUEL_BAG];
-    this.fuel = typeof bag === "number" ? bag : 100;
+    this.fuel = fuelState.get(vehicle) ?? 100;
     this.reported = this.fuel;
     this.timer = setInterval(() => this.tick(vehicle), 1000);
   }
@@ -52,8 +44,8 @@ class Burner {
   private tick(vehicle: number): void {
     if (cache.vehicle !== vehicle || cache.seat !== -1) return this.stop();
     // A refuel or another driver may have changed the bag.
-    const bag: unknown = Entity(vehicle).state[FUEL_BAG];
-    if (typeof bag === "number" && bag > this.fuel + 0.5)
+    const bag = fuelState.get(vehicle);
+    if (bag !== undefined && bag > this.fuel + 0.5)
       this.fuel = this.reported = bag;
     if (GetIsVehicleEngineRunning(vehicle))
       this.fuel = Math.max(
@@ -94,8 +86,7 @@ async function refuel(stationId: string): Promise<void> {
   const vehicle = cache.vehicle;
   if (vehicle === false || cache.seat !== -1)
     return notify(Locale("FUEL_ERR_NO_VEHICLE"), "error");
-  const bag: unknown = Entity(vehicle).state[FUEL_BAG];
-  const missing = 100 - (typeof bag === "number" ? bag : 100);
+  const missing = 100 - (fuelState.get(vehicle) ?? 100);
   if (missing < 1) return notify(Locale("FUEL_ERR_FULL"), "info");
   SetVehicleEngineOn(vehicle, false, true, true);
   const done = await progress({

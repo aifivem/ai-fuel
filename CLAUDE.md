@@ -1,6 +1,6 @@
 # ai-fuel
 
-Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag (0-100) the server keeps; ai-vehicles seeds it on spawn and stores it for owned vehicles, ai-hud shows it. Depends on ai-core (money, prompts, admin panel); ai-vehicles optional. Research and decisions: `docs/research/vehicles.md`.
+Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag (0-100) the server keeps; ai-vehicles seeds it on spawn and stores it for owned vehicles, ai-hud shows it. Depends on ai-core (money, prompts, admin panel); ai-vehicles optional.
 
 ## Decisions
 

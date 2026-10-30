@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ai-fuel/data/stations.json",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "This file's JSON Schema (for editors)."
+    }
+  },
+  "patternProperties": {
+    "^[a-z0-9_]{2,32}$": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "description": "Name",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "coords": {
+          "description": "Centre: Stand in the middle of the pumps and use your position.",
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "z": {
+              "type": "number"
+            }
+          }
+        },
+        "radius": {
+          "description": "Area: How far from the centre a vehicle can refuel.",
+          "type": "number",
+          "minimum": 2,
+          "maximum": 40
+        },
+        "price": {
+          "description": "Price: Dollars per percent of a tank (a full fill from empty costs 100 times this).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "blip": {
+          "description": "Map blip",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "coords",
+        "radius",
+        "price",
+        "blip"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

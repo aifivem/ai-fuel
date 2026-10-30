@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ai-fuel/data/settings.json",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "This file's JSON Schema (for editors)."
+    },
+    "consumption": {
+      "description": "Burn rate: 1 is normal (a full tank lasts about 25 minutes of driving), 2 burns twice as fast, 0 turns fuel off.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10
+    },
+    "accounts": {
+      "description": "Paid from: Money accounts tried in order.",
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "maxLength": 32,
+        "pattern": "^[a-z0-9_]{2,32}$"
+      }
+    },
+    "refuelSecondsPerLiter": {
+      "description": "Refuel time: Seconds per percent filled.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+    }
+  },
+  "required": [
+    "consumption",
+    "accounts",
+    "refuelSecondsPerLiter"
+  ]
+}

@@ -1,4 +1,5 @@
 {
+  "$schema": "./schemas/stations.schema.json",
   "station_1": {
     "label": "Gas Station",
     "coords": {
@@ -127,7 +128,7 @@
       "y": -1471.77,
       "z": 30.55
     },
-    "radius": 14.0,
+    "radius": 14,
     "price": 3,
     "blip": true
   },
@@ -200,7 +201,7 @@
   "station_19": {
     "label": "Gas Station",
     "coords": {
-      "x": 2538.0,
+      "x": 2538,
       "y": 2593.83,
       "z": 37.94
     },
@@ -212,7 +213,7 @@
     "label": "Gas Station",
     "coords": {
       "x": 2680.01,
-      "y": 3265.0,
+      "y": 3265,
       "z": 55.24
     },
     "radius": 10,

@@ -182,6 +182,16 @@ try{
 		worldChangesCallback: (resource) => `${resource}:admin:worldChanges`
 	};
 
+// ../../../packages/shared/src/menu.ts
+	const MENU_EVENTS = {
+		/** Client local: (resource, requestId, itemId | null) the player picked an item or closed the menu. */
+		menuResult: "ai-core:client:menuResult",
+		/** Client local: (resource, requestId, itemId) the pointer or focus is on an item (previews). */
+		menuHover: "ai-core:client:menuHover",
+		/** Client local: (resource, requestId, values | null) the player confirmed or closed the input dialog. */
+		inputResult: "ai-core:client:inputResult"
+	};
+
 // ../../../packages/lib/src/client/adminWorld.ts
 /**
 	* The client copy of a resource's world panel files (`sync: "all"`): the file FiveM cached at start, then the
@@ -530,6 +540,35 @@ try{
 		core.HideProgress();
 		return done;
 	}
+
+// ../../../packages/lib/src/client/menu.ts
+/** Menus and input dialogs this resource asked ai-core for, waiting for the player's answer. */
+	var Requests = class {
+		resource = GetCurrentResourceName();
+		waiting = /* @__PURE__ */ new Map();
+		hovers = /* @__PURE__ */ new Map();
+		nextId = 0;
+		constructor() {
+			const answer = (owner, id, value) => {
+				if (owner !== this.resource || typeof id !== "number") return;
+				this.waiting.get(id)?.(value);
+				this.waiting.delete(id);
+				this.hovers.delete(id);
+			};
+			on(MENU_EVENTS.menuHover, (owner, id, item) => {
+				if (owner === this.resource && typeof id === "number" && typeof item === "string") this.hovers.get(id)?.(item);
+			});
+			on(MENU_EVENTS.menuResult, answer);
+			on(MENU_EVENTS.inputResult, answer);
+		}
+		ask(open, read, onHover) {
+			const id = ++this.nextId;
+			this.waiting.set(id, read);
+			if (onHover) this.hovers.set(id, onHover);
+			open(id);
+		}
+	};
+	const requests = new Requests();
 
 // ../../../packages/lib/src/client/vehicleProps.ts
 	const MOD_TYPES = Array.from({ length: 50 }, (_, i) => i);

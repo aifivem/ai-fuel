@@ -127,10 +127,18 @@ const CORE = {
 	activeGangChangedEvent: "ai-core:activeGangChanged",
 	/** (src, charIds: number[]) each time a player's character screen loads; an appearance resource answers with portraits. */
 	characterScreenEvent: "ai-core:characterScreen",
+	/** (resource: string | null) the inventory behind ai-core's inventory layer changed (the bridge drops its item cache). */
+	inventoryChangedEvent: "ai-core:inventoryChanged",
+	/** (src, name: string, status: Record<string, number> | null) a player used an item; status = the needs it gives, from inventories that define them. */
+	itemUsedEvent: "ai-core:itemUsed",
+	/** (src, killer: number | null, weaponHash: number) a player with a loaded character died; fired from FXServer's `onPedDeath` (needs `PED_DEATH_STATE_KEY`). */
+	playerDiedEvent: "ai-core:playerDied",
 	clientPlayerLoadedEvent: "ai-core:client:playerLoaded",
 	clientPlayerUnloadedEvent: "ai-core:client:playerUnloaded",
 	/** (charId: number, url: string) a portrait image of a character on the character screen (e.g. `https://nui-img/<txd>/<txd>`). */
 	clientCharacterPortraitEvent: "ai-core:client:characterPortrait",
+	/** (charId: number) ai-appearance holds this character's look: ai-core dresses its scene ped with `ApplyCharacterAppearance`. */
+	clientCharacterLookEvent: "ai-core:client:characterLook",
 	/** (resource: string, id: string) the interaction key was pressed while that resource's prompt was on top. */
 	clientPromptPressedEvent: "ai-core:client:promptPressed",
 	/** (key: keyof PlayerCache, value) a cached value of the local player changed (one watcher in ai-core for every resource). */
@@ -152,9 +160,12 @@ const CORE = {
 const ADMIN = {
 	/** ACE every panel action checks: `add_ace group.admin ai.admin allow`. */
 	ace: "ai.admin",
+	/** Callback: (keybinds: KeybindInfo[] the admin's client knows) -> AdminPanelSnapshot[]. */
 	openCallback: "ai-core:admin:open",
 	applyCallback: "ai-core:admin:apply",
 	closeEvent: "ai-core:admin:close",
+	/** Server -> client: () open the panel (the `aiadmin` command, checked on the server). */
+	showEvent: "ai-core:admin:show",
 	/** Server -> admins with the panel open: (delta: AdminDelta). */
 	deltaEvent: "ai-core:admin:delta",
 	/** Server -> client of a world (`sync: "all"`) file: (file, key | null, value). Prefixed with the resource name. */
@@ -254,7 +265,7 @@ const requestEvent = (name) => `aicore:cb:${name}`;
 const responseEvent = (resource) => `aicore:cbr:${resource}`;
 
 // ../../../packages/lib/src/server/gate.ts
-const log$3 = createLogger(GetCurrentResourceName());
+const log$4 = createLogger(GetCurrentResourceName());
 /** Every gate of this resource; one playerDropped listener frees them all (one listener per gate trips Node's limit). */
 const gates = /* @__PURE__ */ new Set();
 on("playerDropped", () => {
@@ -301,13 +312,13 @@ var ClientGate = class {
 		this.lock?.release(source);
 	}
 	refuse(source, reason) {
-		log$3.warn(`${this.name} refused for ${GetPlayerName(String(source))} (${source}): ${reason}`);
+		log$4.warn(`${this.name} refused for ${GetPlayerName(String(source))} (${source}): ${reason}`);
 	}
 };
 
 // ../../../packages/lib/src/server/callback.ts
-const log$2 = createLogger(GetCurrentResourceName());
-const resource$3 = GetCurrentResourceName();
+const log$3 = createLogger(GetCurrentResourceName());
+const resource$4 = GetCurrentResourceName();
 const REFUSED = Symbol("refused");
 function onClientCallback(name, first, second) {
 	const [handler, options] = typeof first === "function" ? [first, second ?? {}] : [second, first];
@@ -322,13 +333,13 @@ function onClientCallback(name, first, second) {
 			if (result === REFUSED) emitNet(responseEvent(caller), source, id, false, null);
 			else emitNet(responseEvent(caller), source, id, true, result ?? null);
 		} catch (error) {
-			log$2.error(`callback ${name} failed for ${source}`, error);
+			log$3.error(`callback ${name} failed for ${source}`, error);
 			emitNet(responseEvent(caller), source, id, false, null);
 		}
 	});
 }
 const pending = /* @__PURE__ */ new Map();
-onNet(responseEvent(resource$3), (id, ok, result) => {
+onNet(responseEvent(resource$4), (id, ok, result) => {
 	const entry = typeof id === "number" ? pending.get(id) : void 0;
 	if (!entry || entry.source !== Number(globalThis.source)) return;
 	pending.delete(id);
@@ -374,8 +385,28 @@ const ERR = {
 	range: "ADMIN_ERR_RANGE",
 	length: "ADMIN_ERR_LENGTH",
 	pattern: "ADMIN_ERR_PATTERN",
-	required: "ADMIN_ERR_REQUIRED"
+	required: "ADMIN_ERR_REQUIRED",
+	lookup: "ADMIN_ERR_LOOKUP"
 };
+/** Values of a lookup list from ai-core (items, jobs, gangs, accounts), cached for 2 s; null = not known (accepted). */
+var LookupCache = class {
+	lists = /* @__PURE__ */ new Map();
+	values(source) {
+		const cached = this.lists.get(source);
+		if (cached && Date.now() - cached.at < 2e3) return cached.values.size > 0 ? cached.values : null;
+		let list = [];
+		try {
+			list = resourceExport(CORE.resource).GetLookupValues(source);
+		} catch {}
+		const values = new Set(Array.isArray(list) ? list.filter((v) => typeof v === "string") : []);
+		this.lists.set(source, {
+			at: Date.now(),
+			values
+		});
+		return values.size > 0 ? values : null;
+	}
+};
+const lookups = new LookupCache();
 const isVec = (value, keys) => isRecord(value) && keys.every((k) => typeof value[k] === "number" && Number.isFinite(value[k]));
 /** Checks a value against its spec; the first problem found, or null. */
 function validate(spec, value, path) {
@@ -392,6 +423,7 @@ function validate(spec, value, path) {
 			if (typeof value !== "string") return fail(ERR.type);
 			if (value.length < (spec.min ?? 1) || value.length > (spec.max ?? 120)) return fail(ERR.length);
 			if (spec.pattern && !new RegExp(spec.pattern).test(value)) return fail(ERR.pattern);
+			if (spec.lookup && value !== "" && lookups.values(spec.lookup)?.has(value) === false) return fail(ERR.lookup);
 			return null;
 		case "number":
 			if (typeof value !== "number" || !Number.isFinite(value)) return fail(ERR.type);
@@ -407,6 +439,7 @@ function validate(spec, value, path) {
 			for (const name of value) {
 				if (typeof name !== "string" || name.length > (spec.itemMax ?? 64) || seen.has(name)) return fail(ERR.type);
 				if (!pattern.test(name)) return fail(ERR.pattern);
+				if (spec.lookup && lookups.values(spec.lookup)?.has(name) === false) return fail(ERR.lookup);
 				seen.add(name);
 			}
 			return null;
@@ -492,7 +525,7 @@ var AdminPanel = class {
 	apply(admin, raw) {
 		const patch = toPatch(raw);
 		const spec = patch ? this.schema.files[patch.file] : void 0;
-		if (!patch || !spec) return {
+		if (!patch || !spec || spec.memory) return {
 			ok: false,
 			error: ERR.type
 		};
@@ -507,7 +540,7 @@ var AdminPanel = class {
 		this.store(patch, spec);
 		return { ok: true };
 	}
-	/** A change made by the resource itself (game state the panel shows), stored without validation. */
+	/** A change made by the resource itself (game state the panel shows), stored without validation (a `memory` file only in memory). */
 	commit(file, key, value) {
 		const data = this.data.get(file);
 		if (!data) return;
@@ -576,6 +609,10 @@ var AdminPanel = class {
 		emitNet(ADMIN.worldEvent(this.resource), -1, file, key ?? null, value);
 	}
 	load(name, spec) {
+		if (spec.memory) {
+			this.data.set(name, {});
+			return;
+		}
 		const file = new DataFile(this.resource, name, this.log);
 		this.dataFiles.set(name, file);
 		const raw = file.read();
@@ -605,6 +642,225 @@ function aiLog(channel, message, options) {
 function aiLogChannels(channels) {
 	optionalExport("ai-core")?.LogChannels(channels);
 }
+
+// ../../../packages/lib/src/server/online.ts
+/**
+* This resource's mirror of ai-core's loaded players: characters, job and gang names and duty, read once from ai-core's
+* exports on first use and then kept by its local events. Hot paths (every chat message, every alert) read it
+* instead of copying ai-core's whole player list through an export (10k players = 10k export calls per message).
+*/
+var OnlinePlayers = class {
+	players = /* @__PURE__ */ new Map();
+	onDuty = /* @__PURE__ */ new Map();
+	started = false;
+	start() {
+		if (this.started) return;
+		this.started = true;
+		const core = resourceExport(CORE.resource);
+		const load = (source, character) => {
+			this.put(source, character, (core.GetJobs(source) ?? []).map((m) => m.job), (core.GetGangs(source) ?? []).map((m) => m.gang));
+			this.setDuty(source, core.GetDutyJob(source));
+		};
+		on(CORE.playerLoadedEvent, load);
+		on(CORE.playerUnloadedEvent, (source) => this.drop(source));
+		on(CORE.jobsChangedEvent, (source, jobs) => {
+			const player = this.players.get(source);
+			if (player) player.jobs = jobs.map((m) => m.job);
+		});
+		on(CORE.gangsChangedEvent, (source, gangs) => {
+			const player = this.players.get(source);
+			if (player) player.gangs = gangs.map((m) => m.gang);
+		});
+		on(CORE.dutyChangedEvent, (source, job) => this.setDuty(source, job));
+		for (const source of core.GetLoadedSources()) {
+			const character = core.GetCharacter(source);
+			if (character) load(source, character);
+		}
+	}
+	put(source, character, jobs, gangs) {
+		this.drop(source);
+		this.players.set(source, {
+			character,
+			jobs,
+			gangs,
+			duty: null
+		});
+	}
+	drop(source) {
+		this.setDuty(source, null);
+		this.players.delete(source);
+	}
+	setDuty(source, job) {
+		const player = this.players.get(source);
+		if (!player) return;
+		if (player.duty) this.onDuty.get(player.duty)?.delete(source);
+		player.duty = job;
+		if (!job) return;
+		let set = this.onDuty.get(job);
+		if (!set) this.onDuty.set(job, set = /* @__PURE__ */ new Set());
+		set.add(source);
+	}
+	/** Server ids of every player with a loaded character. */
+	sources() {
+		this.start();
+		return this.players.keys();
+	}
+	/** How many players have a loaded character. */
+	get size() {
+		this.start();
+		return this.players.size;
+	}
+	/** The loaded character of a player, or null. */
+	character(source) {
+		this.start();
+		return this.players.get(source)?.character ?? null;
+	}
+	/** Job names of a player (every membership, on duty or not). */
+	jobs(source) {
+		this.start();
+		return this.players.get(source)?.jobs ?? [];
+	}
+	/** Gang names of a player. */
+	gangs(source) {
+		this.start();
+		return this.players.get(source)?.gangs ?? [];
+	}
+	/** The job a player is on duty for, or null. */
+	dutyJob(source) {
+		this.start();
+		return this.players.get(source)?.duty ?? null;
+	}
+	/** Players on duty for a job (a live set: copy before awaiting). */
+	onDutyFor(job) {
+		this.start();
+		return this.onDuty.get(job) ?? EMPTY$1;
+	}
+};
+const EMPTY$1 = /* @__PURE__ */ new Set();
+const online = new OnlinePlayers();
+
+// ../../../packages/lib/src/server/proximity.ts
+/**
+* Who is near whom without scanning every player: OneSync tells the server which players are in each other's scope
+* (`playerEnteredScope` / `playerLeftScope`, ~424 m). A "near" question only measures the few players in scope
+* instead of all 10k online. Players already in scope when the resource starts are found once from a 424 m grid.
+*/
+const SCOPE_RADIUS = 424;
+const posOf = (source) => {
+	const [x = 0, y = 0, z = 0] = GetEntityCoords(GetPlayerPed(String(source)));
+	return {
+		x,
+		y,
+		z
+	};
+};
+var Scopes = class {
+	scopes = /* @__PURE__ */ new Map();
+	started = false;
+	link(a, b) {
+		let set = this.scopes.get(a);
+		if (!set) this.scopes.set(a, set = /* @__PURE__ */ new Set());
+		set.add(b);
+	}
+	start() {
+		if (this.started) return;
+		this.started = true;
+		on("playerEnteredScope", (data) => this.link(Number(data.for), Number(data.player)));
+		on("playerLeftScope", (data) => this.scopes.get(Number(data.for))?.delete(Number(data.player)));
+		on("playerDropped", () => {
+			const source = Number(globalThis.source);
+			for (const other of this.scopes.get(source) ?? []) this.scopes.get(other)?.delete(source);
+			this.scopes.delete(source);
+		});
+		this.seed();
+	}
+	/** The players in scope of each other right now: a grid of scope-sized cells, each player against 9 cells. */
+	seed() {
+		const cells = /* @__PURE__ */ new Map();
+		const all = [];
+		for (let i = 0; i < GetNumPlayerIndices(); i++) {
+			const source = Number(GetPlayerFromIndex(i));
+			const entry = {
+				source,
+				p: posOf(source)
+			};
+			all.push(entry);
+			const key = `${Math.floor(entry.p.x / SCOPE_RADIUS)}:${Math.floor(entry.p.y / SCOPE_RADIUS)}`;
+			const cell = cells.get(key);
+			if (cell) cell.push(entry);
+			else cells.set(key, [entry]);
+		}
+		for (const { source, p } of all) {
+			const cx = Math.floor(p.x / SCOPE_RADIUS);
+			const cy = Math.floor(p.y / SCOPE_RADIUS);
+			for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const other of cells.get(`${cx + dx}:${cy + dy}`) ?? []) if (other.source !== source && Math.hypot(other.p.x - p.x, other.p.y - p.y) <= SCOPE_RADIUS) this.link(source, other.source);
+		}
+	}
+	of(source) {
+		this.start();
+		return this.scopes.get(source) ?? EMPTY;
+	}
+};
+const EMPTY = /* @__PURE__ */ new Set();
+const scopes = new Scopes();
+
+// ../../../packages/lib/src/server/command.ts
+const resource$3 = GetCurrentResourceName();
+const log$2 = createLogger(resource$3);
+/**
+* This resource's commands: announces them to ai-core (one call per tick of additions) and keeps each player's chat
+* suggestions as a delta of the commands they may use (sent when a character loads, after job or gang changes, and
+* to everyone online when commands are added; removed for everyone when the resource stops).
+*/
+var CommandSet = class {
+	list = [];
+	sent = /* @__PURE__ */ new Map();
+	announced = 0;
+	queued = false;
+	listening = false;
+	add(command) {
+		if (!this.listening) this.listen();
+		this.list.push(command);
+		if (this.queued) return;
+		this.queued = true;
+		setImmediate(() => this.flush());
+	}
+	/** Sends `source` the suggestions they gained and removes the ones they lost. */
+	refresh(source) {
+		const before = this.sent.get(source);
+		const now = /* @__PURE__ */ new Set();
+		const add = [];
+		for (const command of this.list) for (const name of command.info.names) {
+			if (!command.allowed(source, name)) continue;
+			now.add(name);
+			if (!before?.has(name)) add.push(command.suggestion(name));
+		}
+		this.sent.set(source, now);
+		if (add.length) emitNet("chat:addSuggestions", source, add);
+		if (before) {
+			for (const name of before) if (!now.has(name)) emitNet("chat:removeSuggestion", source, `/${name}`);
+		}
+	}
+	flush() {
+		this.queued = false;
+		optionalExport(CORE.resource)?.RegisterCommands(resource$3, this.list.slice(this.announced).map((c) => c.info));
+		this.announced = this.list.length;
+		for (const player of getPlayers()) this.refresh(Number(player));
+	}
+	listen() {
+		this.listening = true;
+		const refresh = (source) => this.refresh(Number(source));
+		on(CORE.playerLoadedEvent, refresh);
+		on(CORE.jobsChangedEvent, refresh);
+		on(CORE.gangsChangedEvent, refresh);
+		on("playerDropped", () => this.sent.delete(Number(globalThis.source)));
+		on("onResourceStop", (name) => {
+			if (name !== resource$3) return;
+			for (const command of this.list) for (const n of command.info.names) emitNet("chat:removeSuggestion", -1, `/${n}`);
+		});
+	}
+};
+const commands = new CommandSet();
 
 // ../../../packages/lib/src/server/netEvent.ts
 const log$1 = createLogger(GetCurrentResourceName());
@@ -24605,6 +24861,7 @@ const fuelSchema = {
 				},
 				accounts: {
 					type: "names",
+					lookup: "account",
 					max: 5,
 					itemMax: 32,
 					pattern: "^[a-z0-9_]{2,32}$"
@@ -24668,6 +24925,7 @@ const fuelSchema = {
 				{
 					widget: "text",
 					path: "label",
+					suggest: { from: "coords" },
 					label: "ADMIN_F_LABEL",
 					placeholder: "ADMIN_P_LABEL"
 				},
@@ -24736,6 +24994,7 @@ const fuelSchema = {
 				},
 				{
 					widget: "tags",
+					lookup: "account",
 					path: "accounts",
 					label: "ADMIN_F_ACCOUNTS",
 					hint: "ADMIN_H_ACCOUNTS",

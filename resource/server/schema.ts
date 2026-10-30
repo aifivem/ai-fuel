@@ -10,7 +10,7 @@ export const fuelSchema: PanelSchema = {
       sync: "all",
       sections: {
         consumption: { type: "number", min: 0, max: 10 },
-        accounts: { type: "names", max: 5, itemMax: 32, pattern: "^[a-z0-9_]{2,32}$" },
+        accounts: { type: "names", lookup: "account", max: 5, itemMax: 32, pattern: "^[a-z0-9_]{2,32}$" },
         refuelSecondsPerLiter: { type: "number", min: 0, max: 5 },
       },
     },
@@ -37,7 +37,7 @@ export const fuelSchema: PanelSchema = {
           title: "ADMIN_C_STATION",
           desc: "ADMIN_C_STATION_DESC",
           fields: [
-            { widget: "text", path: "label", label: "ADMIN_F_LABEL", placeholder: "ADMIN_P_LABEL" },
+            { widget: "text", path: "label", suggest: { from: "coords" }, label: "ADMIN_F_LABEL", placeholder: "ADMIN_P_LABEL" },
             { widget: "point", path: "coords", label: "ADMIN_F_COORDS", hint: "ADMIN_H_COORDS", ground: true },
             { widget: "number", path: "radius", label: "ADMIN_F_RADIUS", hint: "ADMIN_H_RADIUS", min: 2, max: 40, unit: "m" },
             { widget: "number", path: "price", label: "ADMIN_F_PRICE", hint: "ADMIN_H_PRICE", min: 0, max: 1000, step: 0.5, unit: "$" },
@@ -60,7 +60,7 @@ export const fuelSchema: PanelSchema = {
           fields: [
             { widget: "number", path: "consumption", label: "ADMIN_F_CONSUMPTION", hint: "ADMIN_H_CONSUMPTION", min: 0, max: 10, step: 0.1 },
             { widget: "number", path: "refuelSecondsPerLiter", label: "ADMIN_F_REFUEL_TIME", hint: "ADMIN_H_REFUEL_TIME", min: 0, max: 5, step: 0.05, unit: "s" },
-            { widget: "tags", path: "accounts", label: "ADMIN_F_ACCOUNTS", hint: "ADMIN_H_ACCOUNTS", placeholder: "ADMIN_P_ACCOUNTS" },
+            { widget: "tags", lookup: "account", path: "accounts", label: "ADMIN_F_ACCOUNTS", hint: "ADMIN_H_ACCOUNTS", placeholder: "ADMIN_P_ACCOUNTS" },
           ],
         },
       ],

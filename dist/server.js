@@ -43,12 +43,93 @@ function str(value, fallback, max = 64) {
 function record(value) {
 	return typeof value == "object" && value && !Array.isArray(value) ? value : {};
 }
+// ../../../packages/lib/src/shared/records.ts
+const isObject = (value) => typeof value == "object" && !!value && !Array.isArray(value);
+function readRecords(raw, readOne) {
+	let out = new Map();
+	if (!isObject(raw)) return out;
+	for (let key in raw) {
+		let value = raw[key];
+		if (!isObject(value)) continue;
+		let parsed = readOne(key, value);
+		parsed !== null && out.set(key, parsed);
+	}
+	return out;
+}
+var FileViews = class {
+	read;
+	updaters = new Map();
+	constructor(read) {
+		this.read = read;
+	}
+	view(file, parse) {
+		let box = { value: parse(this.read(file)) };
+		return this.on(file, () => box.value = parse(this.read(file))), box;
+	}
+	records(file, readOne) {
+		let live = new LiveRecords(readOne);
+		return live.reset(this.read(file)), this.on(file, (key, value) => live.update(key, value, this.read(file))), live.map;
+	}
+	changed(file, key, value) {
+		for (let update of this.updaters.get(file) ?? []) update(key, value);
+	}
+	on(file, update) {
+		let list = this.updaters.get(file);
+		list ? list.push(update) : this.updaters.set(file, [update]);
+	}
+}, LiveRecords = class {
+	readOne;
+	map = new Map();
+	constructor(readOne) {
+		this.readOne = readOne;
+	}
+	reset(raw) {
+		this.map.clear();
+		for (let [key, value] of readRecords(raw, this.readOne)) this.map.set(key, value);
+	}
+	update(key, value, whole) {
+		if (key === void 0) return this.reset(whole);
+		let parsed = isObject(value) ? this.readOne(key, value) : null;
+		parsed === null ? this.map.delete(key) : this.map.set(key, parsed);
+	}
+};
 // ../../../packages/lib/src/shared/index.ts
 function isRecord(value) {
 	return typeof value == "object" && !!value && !Array.isArray(value);
 }
 function logSafe(text, max) {
 	return text.replace(/\r?\n/g, " | ").replace(/[\u0000-\u001f\u007f]/g, "").replace(/\^\d/g, "").slice(0, max);
+}
+function previewJson(value, max) {
+	let out = "", walk = (v, depth) => {
+		if (out.length >= max) return;
+		if (typeof v == "string") {
+			out += JSON.stringify(v.length > max ? v.slice(0, max) : v);
+			return;
+		}
+		if (typeof v != "object" || !v) {
+			out += String(v);
+			return;
+		}
+		if (depth > 4) {
+			out += Array.isArray(v) ? "[...]" : "{...}";
+			return;
+		}
+		if (Array.isArray(v)) {
+			out += "[";
+			for (let i = 0; i < v.length && out.length < max; i++) i > 0 && (out += ","), walk(v[i], depth + 1);
+			out += "]";
+			return;
+		}
+		out += "{";
+		let first = !0;
+		for (let key in v) {
+			if (out.length >= max) break;
+			first || (out += ","), first = !1, out += `${JSON.stringify(key.slice(0, 50))}:`, walk(v[key], depth + 1);
+		}
+		out += "}";
+	};
+	return walk(value, 0), out.slice(0, max);
 }
 function createLogger(resource) {
 	let prefix = `[${resource}]`;
@@ -144,12 +225,14 @@ const CORE = {
 	closeEvent: "ai-core:admin:close",
 	showEvent: "ai-core:admin:show",
 	deltaEvent: "ai-core:admin:delta",
+	recommendationEvent: "ai-core:admin:recommendation",
 	worldEvent: (resource) => `${resource}:admin:world`,
 	worldChangesCallback: (resource) => `${resource}:admin:worldChanges`
-};
-// ../../../packages/lib/src/fivem/exports.ts
+}, named = new Set();
 function registerExport(name, handler) {
-	globalThis.exports(name, handler);
+	named.add(name), globalThis.exports(name, handler);
+	let first = name.charAt(0), twin = (first === first.toUpperCase() ? first.toLowerCase() : first.toUpperCase()) + name.slice(1);
+	twin !== name && !named.has(twin) && globalThis.exports(twin, handler);
 }
 function resourceExport(resource) {
 	return globalThis.exports[resource];
@@ -180,7 +263,7 @@ function loadLocaleTexts(resource = GetCurrentResourceName()) {
 // ../../../packages/lib/src/fivem/callbackNames.ts
 const requestEvent = (name) => `aicore:cb:${name}`, responseEvent = (resource) => `aicore:cbr:${resource}`;
 resourceExport(CORE.resource);
-const log$4 = createLogger(GetCurrentResourceName()), gates = new Set();
+const log$5 = createLogger(GetCurrentResourceName()), gates = new Set();
 on("playerDropped", () => {
 	let source = Number(globalThis.source);
 	for (let gate of gates) gate.release(source);
@@ -190,31 +273,42 @@ var ClientGate = class {
 	options;
 	limit;
 	lock;
+	refusals = new Map();
 	constructor(name, options, defaultRate) {
 		this.name = name, this.options = options, this.limit = new RateLimit(options.rate?.count ?? defaultRate, options.rate?.windowMs ?? 1e3), this.lock = options.lock ? new SourceLock() : null, gates.add(this);
 	}
 	check(source, raw) {
-		if (!(source > 0) || !GetPlayerName(String(source)) || !this.limit.take(source)) return null;
+		if (!(source > 0) || !GetPlayerName(String(source))) return null;
+		if (!this.limit.take(source)) return this.refuse(source, "rate limit"), null;
 		for (let guard of this.options.guards ?? []) {
 			let verdict = guard(source);
 			if (verdict !== !0) return typeof verdict == "string" && this.refuse(source, verdict), null;
 		}
 		if (!this.options.args) return [];
 		let args = this.options.args(raw);
-		return args === null && this.refuse(source, `invalid arguments ${logSafe(JSON.stringify(raw) ?? "", 200)}`), args;
+		return args === null && this.refuse(source, () => `invalid arguments ${logSafe(previewJson(raw, 200), 200)}`), args;
 	}
 	run(source, busy, task) {
 		return this.lock ? this.lock.run(source, busy, async () => task()) : Promise.resolve(task());
 	}
 	release(source) {
-		this.limit.release(source), this.lock?.release(source);
+		this.limit.release(source), this.lock?.release(source), this.refusals.delete(source);
 	}
 	refuse(source, reason) {
-		log$4.warn(`${this.name} refused for ${GetPlayerName(String(source))} (${source}): ${reason}`);
+		let now = GetGameTimer(), last = this.refusals.get(source);
+		if (last && now - last.at < 1e4) {
+			last.skipped++;
+			return;
+		}
+		let more = last?.skipped ? ` (+${last.skipped} more refused)` : "";
+		this.refusals.set(source, {
+			at: now,
+			skipped: 0
+		}), log$5.warn(`${this.name} refused for ${GetPlayerName(String(source))} (${source}): ${typeof reason == "string" ? reason : reason()}${more}`);
 	}
 };
 // ../../../packages/lib/src/server/callback.ts
-const log$3 = createLogger(GetCurrentResourceName()), resource$1 = GetCurrentResourceName(), REFUSED = Symbol("refused");
+const log$4 = createLogger(GetCurrentResourceName()), resource$1 = GetCurrentResourceName(), REFUSED = Symbol("refused");
 function onClientCallback(name, first, second) {
 	let [handler, options] = typeof first == "function" ? [first, second ?? {}] : [second, first], gate = new ClientGate(name, options, 20);
 	onNet(requestEvent(name), async (caller, id, ...raw) => {
@@ -226,7 +320,7 @@ function onClientCallback(name, first, second) {
 			let result = await gate.run(source, REFUSED, () => handler(source, ...args));
 			result === REFUSED ? emitNet(responseEvent(caller), source, id, !1, null) : emitNet(responseEvent(caller), source, id, !0, result ?? null);
 		} catch (error) {
-			log$3.error(`callback ${name} failed for ${source}`, error), emitNet(responseEvent(caller), source, id, !1, null);
+			log$4.error(`callback ${name} failed for ${source}`, error), emitNet(responseEvent(caller), source, id, !1, null);
 		}
 	});
 }
@@ -258,6 +352,12 @@ function toPatch(value) {
 			action: "delete",
 			key
 		} : null;
+		case "run": return typeof value.id == "string" && value.id.length <= 64 ? {
+			file: value.file,
+			action: "run",
+			key,
+			id: value.id
+		} : null;
 		case "import": {
 			if (!isRecord(value.records)) return null;
 			let records = {};
@@ -271,7 +371,7 @@ function toPatch(value) {
 		default: return null;
 	}
 }
-const clone = (value) => value === void 0 ? value : JSON.parse(JSON.stringify(value)), core$9 = resourceExport(CORE.resource), ERR = {
+const clone = (value) => value === void 0 ? value : JSON.parse(JSON.stringify(value)), core$14 = resourceExport(CORE.resource), ERR = {
 	type: "ADMIN_ERR_TYPE",
 	range: "ADMIN_ERR_RANGE",
 	length: "ADMIN_ERR_LENGTH",
@@ -285,7 +385,7 @@ const clone = (value) => value === void 0 ? value : JSON.parse(JSON.stringify(va
 		if (cached && Date.now() - cached.at < 2e3) return cached.values.size > 0 ? cached.values : null;
 		let list = [];
 		try {
-			list = core$9.GetLookupValues(source);
+			list = core$14.GetLookupValues(source);
 		} catch {}
 		let values = new Set(Array.isArray(list) ? list.filter((v) => typeof v == "string") : []);
 		return this.lists.set(source, {
@@ -373,6 +473,7 @@ function texts(resource) {
 }
 function collect(fields, prefix, lang, out) {
 	for (let field of fields) {
+		if (field.widget === "action") continue;
 		let path = prefix + field.path, label = lang[field.label] ?? field.label, hint = field.hint ? lang[field.hint] ?? field.hint : "";
 		out.has(path) || out.set(path, hint ? `${label}: ${hint}` : label), field.widget === "list" && collect(field.rows, `${path}[].`, lang, out);
 	}
@@ -487,7 +588,7 @@ function writeSchema(resource, name, text, log) {
 	(0, node_fs_promises.mkdir)(dir, { recursive: !0 }).then(() => (0, node_fs_promises.writeFile)(`${dir}/${name}.schema.json`, text, "utf8")).catch((error) => log.error(`writing ${resource}/${path} failed`, error));
 }
 // ../../../packages/lib/src/server/admin/panel.ts
-const core$8 = resourceExport(CORE.resource), DEFAULT_KEY = "^[a-z0-9_]{2,32}$";
+const core$13 = resourceExport(CORE.resource), DEFAULT_KEY = "^[a-z0-9_]{2,32}$";
 function imported(spec, value) {
 	let base = clone(spec.newRecord ?? {}), out = {};
 	for (let name of Object.keys(spec.sections)) {
@@ -502,13 +603,16 @@ var AdminPanel = class {
 	dataFiles = new Map();
 	handlers = new Map();
 	rules = new Map();
+	actions = new Map();
+	views = new FileViews((file) => this.get(file));
 	worldChanges = new Map();
 	resource = GetCurrentResourceName();
 	log = createLogger(this.resource);
+	editor = 0;
 	constructor(schema) {
 		this.schema = schema;
 		for (let [name, spec] of Object.entries(schema.files)) this.load(name, spec);
-		registerExport("AdminPanelSnapshot", () => this.snapshot()), registerExport("AdminPanelApply", (admin, patch) => this.apply(admin, patch)), onClientCallback(ADMIN.worldChangesCallback(this.resource), () => Object.fromEntries(this.worldChanges)), setImmediate(() => core$8.RegisterAdminPanel(this.resource));
+		registerExport("AdminPanelSnapshot", () => this.snapshot()), registerExport("AdminPanelApply", (admin, patch) => this.apply(admin, patch)), onClientCallback(ADMIN.worldChangesCallback(this.resource), () => Object.fromEntries(this.worldChanges)), setImmediate(() => core$13.RegisterAdminPanel(this.resource));
 	}
 	get(file) {
 		return this.data.get(file) ?? {};
@@ -518,6 +622,15 @@ var AdminPanel = class {
 	}
 	rule(file, rule) {
 		this.rules.set(file, rule);
+	}
+	onAction(id, handler) {
+		this.actions.set(id, handler);
+	}
+	view(file, read) {
+		return this.views.view(file, read);
+	}
+	records(file, readOne) {
+		return this.views.records(file, readOne);
 	}
 	snapshot() {
 		return {
@@ -529,19 +642,51 @@ var AdminPanel = class {
 	}
 	apply(admin, raw) {
 		let patch = toPatch(raw), spec = patch ? this.schema.files[patch.file] : void 0;
-		if (!patch || !spec || spec.memory) return {
+		if (!patch || !spec) return {
 			ok: !1,
 			error: ERR.type
 		};
-		let error = this.check(patch, spec);
-		return error ? (this.log.warn(`admin ${admin} edit refused (${error}): ${JSON.stringify(patch).slice(0, 300)}`), {
+		this.editor = admin;
+		try {
+			if (patch.action === "run") return this.run(admin, patch, spec);
+			if (spec.memory) return {
+				ok: !1,
+				error: ERR.type
+			};
+			let error = this.check(patch, spec);
+			return error ? (this.log.warn(`admin ${admin} edit refused (${error}): ${previewJson(patch, 300)}`), {
+				ok: !1,
+				error
+			}) : (this.store(patch, spec), { ok: !0 });
+		} finally {
+			this.editor = 0;
+		}
+	}
+	run(admin, patch, spec) {
+		let handler = this.actions.get(patch.id), data = this.get(patch.file), target = spec.kind === "records" ? data[patch.key ?? ""] : data;
+		if (!handler || !isRecord(target)) return {
 			ok: !1,
-			error
-		}) : (this.store(patch, spec), { ok: !0 });
+			error: ERR.type
+		};
+		try {
+			let error = handler(admin, clone(target), patch.key);
+			return error ? {
+				ok: !1,
+				error
+			} : { ok: !0 };
+		} catch (error) {
+			return this.log.error(`panel action ${patch.id} failed`, error), {
+				ok: !1,
+				error: ERR.type
+			};
+		}
 	}
 	commit(file, key, value) {
 		let data = this.data.get(file);
 		data && (key === void 0 ? isRecord(value) && this.data.set(file, clone(value)) : value === null ? delete data[key] : data[key] = clone(value), this.changed(file, key));
+	}
+	commitAfter(file, key, value) {
+		setImmediate(() => this.commit(file, key, value));
 	}
 	linked(spec, value) {
 		return spec.type === "text" && spec.records && typeof value == "string" && value !== "" && !(value in this.get(spec.records)) ? "ADMIN_ERR_LOOKUP" : null;
@@ -599,9 +744,9 @@ var AdminPanel = class {
 	}
 	changed(file, key) {
 		let spec = this.schema.files[file], data = this.get(file), value = key === void 0 ? data : data[key] ?? null;
-		this.dataFiles.get(file)?.write(data);
+		this.dataFiles.get(file)?.write(data), this.views.changed(file, key, value);
 		for (let handler of this.handlers.get(file) ?? []) handler(key, value);
-		if (core$8.AdminPanelChanged({
+		if (core$13.AdminPanelChanged({
 			resource: this.resource,
 			file,
 			key,
@@ -631,7 +776,7 @@ function aiLogChannels(channels) {
 }
 resourceExport(CORE.resource);
 // ../../../packages/lib/src/server/online.ts
-const core$6 = resourceExport(CORE.resource);
+const core$11 = resourceExport(CORE.resource);
 var OnlinePlayers = class {
 	players = new Map();
 	onDuty = new Map();
@@ -640,7 +785,7 @@ var OnlinePlayers = class {
 		if (this.started) return;
 		this.started = !0;
 		let load = (source, character) => {
-			this.put(source, character, (core$6.GetJobs(source) ?? []).map((m) => m.job), (core$6.GetGangs(source) ?? []).map((m) => m.gang)), this.setDuty(source, core$6.GetDutyJob(source));
+			this.put(source, character, (core$11.GetJobs(source) ?? []).map((m) => m.job), (core$11.GetGangs(source) ?? []).map((m) => m.gang)), this.setDuty(source, core$11.GetDutyJob(source));
 		};
 		on(CORE.playerLoadedEvent, load), on(CORE.playerUnloadedEvent, (source) => this.drop(source)), on(CORE.jobsChangedEvent, (source, jobs) => {
 			let player = this.players.get(source);
@@ -649,8 +794,8 @@ var OnlinePlayers = class {
 			let player = this.players.get(source);
 			player && (player.gangs = gangs.map((m) => m.gang));
 		}), on(CORE.dutyChangedEvent, (source, job) => this.setDuty(source, job));
-		for (let source of core$6.GetLoadedSources()) {
-			let character = core$6.GetCharacter(source);
+		for (let source of core$11.GetLoadedSources()) {
+			let character = core$11.GetCharacter(source);
 			character && load(source, character);
 		}
 	}
@@ -694,7 +839,7 @@ var OnlinePlayers = class {
 	}
 };
 const EMPTY = new Set();
-new OnlinePlayers(), resourceExport(CORE.resource), resourceExport(CORE.resource);
+new OnlinePlayers(), resourceExport(CORE.resource), resourceExport(CORE.resource), createLogger(GetCurrentResourceName());
 // ../../../packages/lib/src/server/command.ts
 const resource = GetCurrentResourceName();
 createLogger(resource), new class {
@@ -819,7 +964,7 @@ var Mirror = class {
 		Player(source).state.set(this.key, value ?? null, !0), this.put(source, value);
 	}
 };
-resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource);
+resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource);
 // resource/common/fuel.ts
 const EVENTS = {
 	consume: "ai-fuel:consume",

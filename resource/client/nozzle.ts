@@ -1,16 +1,9 @@
 import { PlayerState, requestModel } from "@aicore-fivem/lib/client";
 import { waitFor } from "@aicore-fivem/lib/shared";
-import {
-  HOSE_LENGTH,
-  NOZZLE_BAG,
-  PUMP_MODELS,
-  toNozzle,
-  type Nozzle,
-} from "common/fuel";
+import { NOZZLE_BAG, PUMP_MODELS, toNozzle, type Nozzle } from "common/fuel";
+import { addHose, attachToHand, attachToVehicle } from "./placement";
 
 const NOZZLE_MODEL = "prop_cs_fuel_nozle";
-/** Left hand (SKEL_L_Hand). */
-const HAND_BONE = 18905;
 const PUMP_HASHES = PUMP_MODELS.map((m) => GetHashKey(m));
 
 interface Drawn {
@@ -87,7 +80,7 @@ class NozzleView {
     const d: Drawn = { nozzle, prop, rope: 0 };
     this.drawn.set(serverId, d);
     this.attach(serverId, d);
-    await this.hose(d);
+    await this.hose(serverId, d);
   }
 
   /** In the holder's hand, or at the fuel cap of the vehicle it fills. */
@@ -98,50 +91,11 @@ class NozzleView {
       NetworkDoesEntityExistWithNetworkId(d.nozzle.netId)
         ? NetToVeh(d.nozzle.netId)
         : 0;
-    if (vehicle) {
-      const cap = GetEntityBoneIndexByName(vehicle, "petrolcap");
-      const bone =
-        cap !== -1 ? cap : GetEntityBoneIndexByName(vehicle, "petroltank");
-      AttachEntityToEntity(
-        d.prop,
-        vehicle,
-        Math.max(bone, 0),
-        0,
-        0,
-        0.05,
-        -90,
-        0,
-        90,
-        true,
-        true,
-        false,
-        false,
-        1,
-        true,
-      );
-      return;
-    }
-    const ped = GetPlayerPed(GetPlayerFromServerId(serverId));
-    AttachEntityToEntity(
-      d.prop,
-      ped,
-      GetPedBoneIndex(ped, HAND_BONE),
-      0.11,
-      0.02,
-      0.02,
-      -80,
-      -90,
-      15,
-      true,
-      true,
-      false,
-      true,
-      1,
-      true,
-    );
+    if (vehicle && attachToVehicle(d.prop, vehicle)) return;
+    attachToHand(d.prop, GetPlayerPed(GetPlayerFromServerId(serverId)));
   }
 
-  private async hose(d: Drawn): Promise<void> {
+  private async hose(serverId: number, d: Drawn): Promise<void> {
     const pump = pumpAt(d.nozzle);
     if (!pump) return;
     RopeLoadTextures();
@@ -151,44 +105,13 @@ class NozzleView {
       ))
     )
       return;
-    if (!DoesEntityExist(d.prop)) return;
-    const { x, y, z } = d.nozzle;
-    const [rope] = AddRope(
-      x,
-      y,
-      z + 1.2,
-      0,
-      0,
-      0,
-      HOSE_LENGTH,
-      1,
-      HOSE_LENGTH,
-      1,
-      1,
-      false,
-      false,
-      false,
-      1,
-      true,
-    );
-    ActivatePhysics(rope);
-    const [nx = 0, ny = 0, nz = 0] = GetEntityCoords(d.prop, false);
-    AttachEntitiesToRope(
-      rope,
-      pump,
-      d.prop,
-      x,
-      y,
-      z + 1.2,
-      nx,
-      ny,
-      nz,
-      HOSE_LENGTH,
-      false,
-      false,
-      "",
-      "",
-    );
+    if (this.drawn.get(serverId) !== d) return;
+    const rope = await addHose(pump, d.prop);
+    // Cleared while the rope was being made.
+    if (this.drawn.get(serverId) !== d) {
+      if (rope) DeleteRope(rope);
+      return;
+    }
     d.rope = rope;
   }
 
@@ -196,7 +119,10 @@ class NozzleView {
     const d = this.drawn.get(serverId);
     if (!d) return;
     this.drawn.delete(serverId);
-    if (d.rope) DeleteRope(d.rope);
+    if (d.rope && DoesRopeExist(d.rope)[0]) DeleteRope(d.rope);
+    // Rope textures are loaded for the whole scene: free them only with the last hose.
+    if (d.rope && ![...this.drawn.values()].some((o) => o.rope))
+      RopeUnloadTextures();
     if (DoesEntityExist(d.prop)) DeleteEntity(d.prop);
   }
 }

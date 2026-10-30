@@ -17,6 +17,7 @@ import { record } from "@aicore-fivem/lib/shared";
 import { Locale } from "common";
 import { EVENTS, FUEL_BAG, HOSE_LENGTH, PUMP_MODELS } from "common/fuel";
 import { nozzles } from "./nozzle";
+import { fuelCap } from "./placement";
 
 const fuelState = new EntityState(FUEL_BAG, stateNumber);
 const PROMPT = "refuel";
@@ -33,6 +34,14 @@ export function configurePump(
 }
 
 const holding = () => nozzles.get(cache.serverId);
+/** A short reach toward the pump when the nozzle is taken or hung up. */
+const grab = () =>
+  void player.playAnim("anim@am_hold_up@male", "shoplift_high", {
+    blendIn: 2,
+    blendOut: 8,
+    duration: 300,
+    flag: 50,
+  });
 const fail = (result: unknown) => {
   const key =
     typeof record(result).error === "string"
@@ -50,6 +59,7 @@ points.addModel("pump", {
   radius: 1.6,
   canShow: () => cache.vehicle === false,
   onPressed: async (pump) => {
+    grab();
     if (holding()) return emitNet(EVENTS.returnNozzle);
     const [x = 0, y = 0, z = 0] = GetEntityCoords(pump, false);
     const result = await triggerServerCallback(EVENTS.takeNozzle, [
@@ -103,13 +113,18 @@ async function refuel(vehicle: number): Promise<void> {
   ]).catch(() => null);
   if (record(plugged).ok !== true) return fail(plugged);
   hidePrompt(PROMPT);
+  // Face the cap and push the nozzle in; the player is free while the tank fills.
+  const cap = fuelCap(vehicle);
+  if (cap) TaskTurnPedToFaceCoord(cache.ped, cap.x, cap.y, cap.z, 1000);
+  void player.playAnim("weapons@misc@jerrycan@", "fire", {
+    blendIn: 2,
+    blendOut: 8,
+    duration: 1000,
+    flag: 50,
+  });
   const done = await progress({
     label: Locale("FUEL_REFUELING"),
     duration: Math.max(1000, missing * secondsPerLiter * 1000),
-    anim: {
-      dict: "timetable@gardener@filling_can",
-      clip: "gar_ig_5_filling_can",
-    },
   });
   const result = done
     ? await triggerServerCallback(EVENTS.refuel).catch(() => null)

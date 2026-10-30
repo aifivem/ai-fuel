@@ -1,5 +1,5 @@
 name 'ai-fuel'
-author 'ai-core'
+author 'TGIANN'
 version '0.1.0'
 license 'GPL-3.0-only'
 description 'Fuel use, gas stations and the vehicle fuel state'

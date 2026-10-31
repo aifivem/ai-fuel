@@ -17,6 +17,7 @@ Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag 
 
 ## Contracts
 
+- ai-fuel is the default adapter of ai-core's fuel layer (`docs/compat/fuel.md`): other scripts read and set fuel through lib `fuel`, which reads and writes this `fuel` bag while ai-fuel runs.
 - Events: `resource/common/fuel.ts`. State bag `fuel` on vehicles, player state `aiFuelNozzle`. Owned vehicles' fuel goes to ai-vehicles `SaveVehicle` when the whole number changes.
 
 ## Entry points

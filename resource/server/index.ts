@@ -5,11 +5,13 @@ import {
   entityCoords,
   EntityState,
   isNear,
+  notify,
   onClientCallback,
   onClientEvent,
   optionalExport,
   PlayerMap,
   PlayerState,
+  progressFor,
   resourceExport,
   stateNumber,
   vehicleFromNet,
@@ -18,10 +20,13 @@ import {
 import {
   distance,
   fail,
+  flatDistance,
   readFinite,
   readId,
   type Vec3,
 } from "@aicore-fivem/lib/shared";
+import type { ActionResult } from "@aicore-fivem/shared";
+import { Locale } from "common";
 import {
   EVENTS,
   FUEL_BAG,
@@ -31,6 +36,7 @@ import {
   readStation,
   toNozzle,
   type Nozzle,
+  type Station,
 } from "common/fuel";
 import { fuelSchema } from "./schema";
 
@@ -87,10 +93,7 @@ const setNozzle = (source: number, nozzle: Nozzle | undefined) => {
 /** The station a pump stands in. */
 function stationAt(pump: Vec3) {
   for (const s of stations.values())
-    if (
-      Math.hypot(pump.x - s.x, pump.y - s.y) <= s.radius + 2 &&
-      Math.abs(pump.z - s.z) <= 10
-    )
+    if (flatDistance(pump, s) <= s.radius + 2 && Math.abs(pump.z - s.z) <= 10)
       return s;
   return undefined;
 }
@@ -145,19 +148,42 @@ onClientEvent(EVENTS.returnNozzle, (source) => setNozzle(source, undefined), {
   rate: NOZZLE_RATE,
 });
 
+/** The plugged vehicle next to the player's nozzle at a station, or null. */
+function plugged(
+  source: number,
+): { nozzle: Nozzle; vehicle: number; station: Station } | null {
+  const nozzle = nozzles.get(source);
+  const station = nozzle ? stationAt(nozzle) : undefined;
+  const vehicle = nozzle?.netId != null ? vehicleFromNet(nozzle.netId) : 0;
+  if (
+    !nozzle ||
+    !station ||
+    !vehicle ||
+    distance(entityCoords(vehicle), nozzle) > HOSE_LENGTH + 2
+  )
+    return null;
+  return { nozzle, vehicle, station };
+}
+
 onClientCallback(
   EVENTS.refuel,
-  (source) => {
-    const nozzle = nozzles.get(source);
-    const station = nozzle ? stationAt(nozzle) : undefined;
-    const vehicle = nozzle?.netId != null ? vehicleFromNet(nozzle.netId) : 0;
-    if (
-      !nozzle ||
-      !station ||
-      !vehicle ||
-      distance(entityCoords(vehicle), nozzle) > HOSE_LENGTH + 2
-    )
-      return fail("FUEL_ERR_FAR");
+  async (source): Promise<ActionResult> => {
+    const first = plugged(source);
+    if (!first) return fail("FUEL_ERR_FAR");
+    const missing = 100 - (fuelOf(first.vehicle) ?? 0);
+    if (Math.floor(missing) <= 0) return fail("FUEL_ERR_FULL");
+    const done = await progressFor(source, {
+      label: Locale("FUEL_REFUELING"),
+      duration: Math.max(
+        1000,
+        missing * settings.value.refuelSecondsPerLiter * 1000,
+      ),
+    });
+    // A cancelled bar ends quietly.
+    if (!done) return { ok: true };
+    const now = plugged(source);
+    if (!now || now.vehicle !== first.vehicle) return fail("FUEL_ERR_FAR");
+    const { vehicle, station } = now;
     const before = fuelOf(vehicle) ?? 0;
     const liters = Math.floor(100 - before);
     if (liters <= 0) return fail("FUEL_ERR_FULL");
@@ -174,7 +200,8 @@ onClientCallback(
       source,
       metadata: { station: station.id, liters, price },
     });
-    return { ok: true, price };
+    notify(source, Locale("FUEL_PAID", price), "success");
+    return { ok: true };
   },
   { lock: true },
 );

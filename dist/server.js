@@ -56,7 +56,7 @@ function readInt(value, min, max) {
 const readId = (value) => readInt(value, 1, 2147483647), fail = (error) => ({
 	ok: !1,
 	error
-}), distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), isPublic = (rule) => rule.jobs.length === 0 && rule.gangs.length === 0, BLIP_STYLE_FIELDS = {
+}), distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z), flatDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y), isPublic = (rule) => rule.jobs.length === 0 && rule.gangs.length === 0, BLIP_STYLE_FIELDS = {
 	sprite: {
 		type: "number",
 		min: 0,
@@ -133,6 +133,13 @@ var FileViews = class {
 		parsed === null ? this.map.delete(key) : this.map.set(key, parsed);
 	}
 };
+// ../../../packages/lib/src/shared/lang.ts
+function formatText(template, args) {
+	return template.replace(/\{(\d+)\}/g, (match, index) => {
+		let value = args[Number(index)];
+		return value === void 0 ? match : String(value);
+	});
+}
 // ../../../packages/lib/src/shared/index.ts
 function isRecord(value) {
 	return typeof value == "object" && !!value && !Array.isArray(value);
@@ -255,6 +262,8 @@ const CORE = {
 	vehicleTypeCallback: "ai-core:vehicleType",
 	interactionStateKey: "ai:interaction",
 	pvpStateKey: "ai:pvp",
+	medicalStateKey: "ai:medical",
+	clientDeadEvent: "ai-core:client:dead",
 	charactersCallback: "ai-core:characters",
 	createCharacterCallback: "ai-core:createCharacter",
 	deleteCharacterCallback: "ai-core:deleteCharacter",
@@ -280,6 +289,14 @@ const CORE = {
 	props: "ai:props",
 	setup: "ai:setup",
 	fuel: "fuel"
+}, LIB_UI = {
+	resource: "ai-lib",
+	notifyEvent: "ai-lib:client:notify",
+	promptPressedEvent: "ai-lib:client:promptPressed",
+	cancelProgressEvent: "ai-lib:client:cancelProgress",
+	progressForCallback: "ai-lib:progressFor",
+	progressForCancelEvent: "ai-lib:client:progressForCancel",
+	minigameForCallback: "ai-lib:minigameFor"
 }, named = new Set();
 function registerExport(name, handler) {
 	named.add(name), globalThis.exports(name, handler);
@@ -303,6 +320,10 @@ function readLocaleFile(resource, lang) {
 	let texts = {};
 	for (let [key, value] of Object.entries(parsed)) typeof value == "string" && (texts[key] = value);
 	return texts;
+}
+function createLocale() {
+	let texts = loadLocaleTexts();
+	return (key, ...args) => formatText(texts[key] ?? key, args);
 }
 function loadLocaleTexts(resource = GetCurrentResourceName()) {
 	let lang = GetConvar("ai:locale", "en"), texts = {
@@ -390,10 +411,25 @@ function onClientCallback(name, first, second) {
 	});
 }
 const pending = new Map();
+let nextId = 0;
 onNet(responseEvent(resource$1), (id, ok, result) => {
 	let entry = typeof id == "number" ? pending.get(id) : void 0;
 	entry && entry.source === Number(globalThis.source) && (pending.delete(id), clearTimeout(entry.timer), ok === !0 ? entry.resolve(result) : entry.reject(Error("client callback failed")));
 });
+function triggerClientCallback(name, source, args = [], timeoutMs = 3e4) {
+	let id = ++nextId;
+	return new Promise((resolve, reject) => {
+		let timer = setTimeout(() => {
+			pending.delete(id), reject(Error(`client callback ${name} timed out for ${source}`));
+		}, timeoutMs);
+		pending.set(id, {
+			source,
+			resolve,
+			reject,
+			timer
+		}), emitNet(requestEvent(name), source, resource$1, id, ...args);
+	});
+}
 // ../../../packages/lib/src/server/admin/patch.ts
 function toPatch(value) {
 	if (!isRecord(value) || typeof value.file != "string") return null;
@@ -885,6 +921,15 @@ function aiLog(channel, message, options) {
 function aiLogChannels(channels) {
 	optionalExport("ai-core")?.LogChannels(channels);
 }
+// ../../../packages/lib/src/server/notify.ts
+function notify(source, text, kind = "info", duration) {
+	let notification = {
+		text,
+		kind,
+		duration
+	};
+	emitNet(LIB_UI.notifyEvent, source, notification);
+}
 resourceExport(CORE.resource);
 // ../../../packages/lib/src/server/online.ts
 const core$14 = resourceExport(CORE.resource);
@@ -958,6 +1003,9 @@ var OnlinePlayers = class {
 	}
 	character(source) {
 		return this.start(), this.players.get(source)?.character ?? null;
+	}
+	charId(source) {
+		return this.start(), this.players.get(source)?.character.id;
 	}
 	name(source, options = {}) {
 		let c = this.character(source);
@@ -1053,6 +1101,17 @@ on(CORE.playerUnloadedEvent, (source) => {
 	let settle = running.get(source);
 	settle && settle(!1);
 });
+function progressFor(source, options) {
+	let previous = running.get(source);
+	previous && (previous(!1), emitNet(LIB_UI.progressForCancelEvent, source));
+	let { minRatio = .8, ...bar } = options, startedAt = GetGameTimer();
+	return new Promise((resolve) => {
+		let done = !1, settle = (ok) => {
+			done || (done = !0, running.get(source) === settle && running.delete(source), resolve(ok));
+		};
+		running.set(source, settle), triggerClientCallback(LIB_UI.progressForCallback, source, [bar], bar.duration + 15e3).then((answer) => settle(answer === !0 && GetGameTimer() - startedAt >= bar.duration * minRatio), () => settle(!1));
+	});
+}
 // ../../../packages/lib/src/server/definitions.ts
 const core$11 = resourceExport("ai-core");
 new class {
@@ -1327,6 +1386,9 @@ var Mirror = class {
 	}
 };
 resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource), resourceExport(CORE.resource);
+// resource/common/locale.ts
+const Locale = createLocale();
+GetCurrentResourceName(), IsDuplicityVersion();
 // resource/common/fuel.ts
 const EVENTS = {
 	consume: "ai-fuel:consume",
@@ -1610,7 +1672,7 @@ const nozzles = new PlayerMap(), nozzleState = new PlayerState("aiFuelNozzle", t
 	nozzle ? nozzles.set(source, nozzle) : nozzles.delete(source), nozzleState.set(source, nozzle);
 };
 function stationAt(pump) {
-	for (let s of stations.values()) if (Math.hypot(pump.x - s.x, pump.y - s.y) <= s.radius + 2 && Math.abs(pump.z - s.z) <= 10) return s;
+	for (let s of stations.values()) if (flatDistance(pump, s) <= s.radius + 2 && Math.abs(pump.z - s.z) <= 10) return s;
 }
 const NOZZLE_RATE = {
 	count: 1,
@@ -1656,10 +1718,27 @@ onClientCallback(EVENTS.takeNozzle, {
 		...nozzle,
 		netId
 	}), { ok: !0 };
-}), onClientEvent(EVENTS.returnNozzle, (source) => setNozzle(source, void 0), { rate: NOZZLE_RATE }), onClientCallback(EVENTS.refuel, (source) => {
+}), onClientEvent(EVENTS.returnNozzle, (source) => setNozzle(source, void 0), { rate: NOZZLE_RATE });
+function plugged(source) {
 	let nozzle = nozzles.get(source), station = nozzle ? stationAt(nozzle) : void 0, vehicle = nozzle?.netId == null ? 0 : vehicleFromNet(nozzle.netId);
-	if (!nozzle || !station || !vehicle || distance(entityCoords(vehicle), nozzle) > 10) return fail("FUEL_ERR_FAR");
-	let before = fuelOf(vehicle) ?? 0, liters = Math.floor(100 - before);
+	return !nozzle || !station || !vehicle || distance(entityCoords(vehicle), nozzle) > 10 ? null : {
+		nozzle,
+		vehicle,
+		station
+	};
+}
+onClientCallback(EVENTS.refuel, async (source) => {
+	let first = plugged(source);
+	if (!first) return fail("FUEL_ERR_FAR");
+	let missing = 100 - (fuelOf(first.vehicle) ?? 0);
+	if (Math.floor(missing) <= 0) return fail("FUEL_ERR_FULL");
+	if (!await progressFor(source, {
+		label: Locale("FUEL_REFUELING"),
+		duration: Math.max(1e3, missing * settings.value.refuelSecondsPerLiter * 1e3)
+	})) return { ok: !0 };
+	let now = plugged(source);
+	if (!now || now.vehicle !== first.vehicle) return fail("FUEL_ERR_FAR");
+	let { vehicle, station } = now, before = fuelOf(vehicle) ?? 0, liters = Math.floor(100 - before);
 	if (liters <= 0) return fail("FUEL_ERR_FULL");
 	let price = Math.ceil(liters * station.price);
 	return settings.value.accounts.some((account) => core.RemoveMoney(source, account, price, `fuel:${station.id}`)) ? (fuelState.set(vehicle, 100), persist(vehicle, 100, null), aiLog("refuels", `refuelled ${liters} for $${price} at ${station.id}`, {
@@ -1669,8 +1748,5 @@ onClientCallback(EVENTS.takeNozzle, {
 			liters,
 			price
 		}
-	}), {
-		ok: !0,
-		price
-	}) : fail("FUEL_ERR_MONEY");
+	}), notify(source, Locale("FUEL_PAID", price), "success"), { ok: !0 }) : fail("FUEL_ERR_MONEY");
 }, { lock: !0 });

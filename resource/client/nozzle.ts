@@ -1,6 +1,12 @@
-import { every, PlayerState, requestModel } from "@aicore-fivem/lib/client";
+import {
+  entityFromNetId,
+  every,
+  onStop,
+  playerPed,
+  PlayerState,
+  requestModel,
+} from "@aicore-fivem/lib/client";
 import { waitFor } from "@aicore-fivem/lib/shared";
-import { ResourceName } from "common";
 import { NOZZLE_BAG, PUMP_MODELS, toNozzle, type Nozzle } from "common/fuel";
 import { addHose, attachToHand, attachToVehicle } from "./placement";
 
@@ -46,16 +52,15 @@ class NozzleView {
 
   constructor(private readonly state: PlayerState<Nozzle>) {
     state.onChange((serverId, nozzle) => void this.update(serverId, nozzle));
-    on("onResourceStop", (resource: string) => {
-      if (resource === ResourceName)
-        for (const id of this.drawn.keys()) this.clear(id);
+    onStop(() => {
+      for (const id of this.drawn.keys()) this.clear(id);
     });
   }
 
   /** Once a second while anything is drawn or waiting: a holder who left scope takes the ped away, one who came back is drawn. */
   private sweep(): void {
     for (const [id, d] of this.drawn) {
-      const ped = GetPlayerPed(GetPlayerFromServerId(id));
+      const ped = playerPed(id);
       if (ped && DoesEntityExist(ped) && DoesEntityExist(d.prop)) continue;
       this.clear(id);
       if (this.state.get(id)) this.waiting.add(id);
@@ -63,8 +68,7 @@ class NozzleView {
     for (const id of this.waiting) {
       const nozzle = this.state.get(id);
       if (!nozzle) this.waiting.delete(id);
-      else if (DoesEntityExist(GetPlayerPed(GetPlayerFromServerId(id))))
-        void this.update(id, nozzle);
+      else if (DoesEntityExist(playerPed(id))) void this.update(id, nozzle);
     }
     this.watch();
   }
@@ -94,7 +98,7 @@ class NozzleView {
       return;
     }
     this.clear(serverId);
-    const ped = GetPlayerPed(GetPlayerFromServerId(serverId));
+    const ped = playerPed(serverId);
     if (!ped || !DoesEntityExist(ped)) {
       this.waiting.add(serverId);
       return this.watch();
@@ -116,12 +120,9 @@ class NozzleView {
   private attach(serverId: number, d: Drawn): void {
     DetachEntity(d.prop, true, false);
     const vehicle =
-      d.nozzle.netId !== null &&
-      NetworkDoesEntityExistWithNetworkId(d.nozzle.netId)
-        ? NetToVeh(d.nozzle.netId)
-        : 0;
+      d.nozzle.netId !== null ? entityFromNetId(d.nozzle.netId, 2) : 0;
     if (vehicle && attachToVehicle(d.prop, vehicle)) return;
-    attachToHand(d.prop, GetPlayerPed(GetPlayerFromServerId(serverId)));
+    attachToHand(d.prop, playerPed(serverId));
   }
 
   private async hose(serverId: number, d: Drawn): Promise<void> {

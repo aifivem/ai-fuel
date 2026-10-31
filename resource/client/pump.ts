@@ -5,13 +5,12 @@ import {
   every,
   notify,
   onCache,
+  onStop,
   player,
   Points,
-  progress,
   stateNumber,
 } from "@aicore-fivem/lib/client";
-import { readFinite } from "@aicore-fivem/lib/shared";
-import { Locale, ResourceName } from "common";
+import { Locale } from "common";
 import { EVENTS, FUEL_BAG, HOSE_LENGTH, PUMP_MODELS } from "common/fuel";
 import { nozzles } from "./nozzle";
 import { fuelCap } from "./placement";
@@ -100,16 +99,14 @@ async function refuel(vehicle: number): Promise<void> {
     duration: 1000,
     flag: 50,
   });
-  const done = await progress({
-    label: Locale("FUEL_REFUELING"),
-    duration: Math.max(1000, missing * secondsPerLiter * 1000),
+  // The server runs the progress bar and charges when it ran out.
+  await callAction(EVENTS.refuel, [], {
+    ...FAR,
+    timeout: missing * secondsPerLiter * 1000 + 30_000,
   });
-  const result = done ? await callAction(EVENTS.refuel, [], FAR) : null;
   await callAction(EVENTS.plug, [null], { ...FAR, silent: true });
-  if (result)
-    notify(Locale("FUEL_PAID", readFinite(result.price) ?? 0), "success");
 }
 
-on("onResourceStop", (resource: string) => {
-  if (resource === ResourceName && holding()) emitNet(EVENTS.returnNozzle);
+onStop(() => {
+  if (holding()) emitNet(EVENTS.returnNozzle);
 });

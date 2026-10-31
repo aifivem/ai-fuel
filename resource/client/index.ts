@@ -2,6 +2,7 @@ import {
   AdminWorld,
   Blips,
   cache,
+  drivenVehicle,
   EntityState,
   every,
   type Job,
@@ -98,12 +99,14 @@ world.onChange("settings", () => {
   burner.settings = readSettings(world.get("settings"));
   burner.applyRate();
 });
-onCache("seat", (seat) =>
-  seat === -1 && cache.vehicle !== false
-    ? burner.start(cache.vehicle)
-    : burner.stop(),
-);
-if (cache.seat === -1 && cache.vehicle !== false) burner.start(cache.vehicle);
+/** The tank burns while the player drives. */
+function follow(): void {
+  const vehicle = drivenVehicle();
+  if (vehicle !== false) burner.start(vehicle);
+  else burner.stop();
+}
+onCache("seat", follow);
+follow();
 
 configurePump(burner.settings.refuelSecondsPerLiter);
 /** Station blips, one record at a time; refuelling itself happens at the map's pumps (`pump.ts`). */

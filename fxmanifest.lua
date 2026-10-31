@@ -1,6 +1,6 @@
 name 'ai-fuel'
 author 'TGIANN'
-version '0.1.0'
+version '0.1.0' -- x-release-please-version
 license 'GPL-3.0-only'
 description 'Fuel use, gas stations and the vehicle fuel state'
 repository 'https://github.com/aifivem/ai-fuel'

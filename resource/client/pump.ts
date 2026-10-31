@@ -41,6 +41,8 @@ points.addModel("pump", {
   label: () => Locale(holding() ? "FUEL_PROMPT_RETURN" : "FUEL_PROMPT_TAKE"),
   icon: "gas-pump",
   radius: 1.6,
+  // A target on the pump models (owner decision): a prompt here would scan the object pool twice a second.
+  preferTarget: true,
   canShow: () => cache.vehicle === false,
   onPressed: async (pump) => {
     grab();
@@ -58,6 +60,7 @@ function setRefuelPoint(on: boolean): void {
     label: Locale("FUEL_PROMPT_REFUEL"),
     icon: "gas-pump",
     radius: 3,
+    preferTarget: true,
     canShow: () => cache.vehicle === false && holding()?.netId === null,
     onPressed: (vehicle) => refuel(vehicle),
   });

@@ -7,7 +7,7 @@
   "author": {
     "name": "TGIANN"
   },
-  "repository": "github:TGIANN/ai-fuel",
+  "repository": "github:aifivem/ai-fuel",
   "type": "module",
   "fxDependencies": [
     "/onesync",

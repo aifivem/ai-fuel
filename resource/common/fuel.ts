@@ -148,4 +148,4 @@ export const ELECTRIC_MODELS = [
   "rcbandito",
 ];
 
-export const DEFAULT_BLIP: BlipStyle = { sprite: 361, color: 1, scale: 0.6 };
+export const DEFAULT_BLIP: BlipStyle = { sprite: 361, color: 0, scale: 0.7 };

@@ -1330,8 +1330,8 @@ const ELECTRIC_MODELS = [
 	"rcbandito"
 ], DEFAULT_BLIP = {
 	sprite: 361,
-	color: 1,
-	scale: .6
+	color: 0,
+	scale: .7
 }, fuelSchema = {
 	title: "ADMIN_TITLE",
 	icon: "gas-pump",

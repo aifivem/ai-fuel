@@ -13,7 +13,7 @@ Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag 
 - Hose: `AddRope` at the pump's top (offset along the pump's up axis: 2.3 m for `prop_gas_pump_1a-1d`, 1.8 vintage, 1.6 old2/old3, else 2.1), 100 ms of physics, then `AttachEntitiesToRope` from there to the nozzle's grip (nozzle offset `0, -0.033, -0.195`), rope length 30. `RopeUnloadTextures` unloads for the whole scene: it runs only when the last drawn hose goes.
 - Animations: a 300 ms reach (`anim@am_hold_up@male` `shoplift_high`) on take and hang-up, and on plugging in the ped turns to the cap and plays a 1 s push (`weapons@misc@jerrycan@` `fire`); the progress bar runs without an animation and the player may move inside the hose's reach.
 - Stations (panel records) give the price and the blip, and decide which pumps sell fuel.
-- Station defaults (27) are converted from ox_fuel's station list (GPL-3.0).
+- Station defaults (27): centres and blip look are qb-fuel's (`Config.GasStations`, its duplicate dropped; `Config.Blip`), radii come from ox_fuel's station list (GPL-3.0).
 
 ## Contracts
 

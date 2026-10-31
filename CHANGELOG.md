@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/aifivem/ai-fuel/compare/v0.1.1...v0.1.2) (2026-10-31)
+
+
+### Miscellaneous Chores
+
+* rebuild with the current lib ([f618f47](https://github.com/aifivem/ai-fuel/commit/f618f47eaf1a2b0fac5920f9655cfe924c0fbbc9))
+
 ## [0.1.1](https://github.com/aifivem/ai-fuel/compare/v0.1.0...v0.1.1) (2026-10-31)
 
 

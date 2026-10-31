@@ -1,6 +1,6 @@
 {
   "name": "ai-fuel",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Fuel use, gas stations and the vehicle fuel state",
   "license": "GPL-3.0-only",

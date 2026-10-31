@@ -22,4 +22,4 @@ Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag 
 ## Entry points
 
 - Server: consume and refuel `resource/server/index.ts`; panel `server/schema.ts`.
-- Client: burner and station blips `resource/client/index.ts`, pump flow `client/pump.ts`, nozzle and hose drawing `client/nozzle.ts`, attach and rope numbers `client/placement.ts`.
+- Client: burner and station blips (lib `RecordObjects`: an edited station redraws only its blip, a settings change all of them) `resource/client/index.ts`, pump flow `client/pump.ts`, nozzle and hose drawing `client/nozzle.ts`, attach and rope numbers `client/placement.ts`.

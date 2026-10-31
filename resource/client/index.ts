@@ -8,7 +8,8 @@ import {
   onCache,
   stateNumber,
 } from "@aicore-fivem/lib/client";
-import { EVENTS, FUEL_BAG, readSettings, readStations } from "common/fuel";
+import { RecordObjects } from "@aicore-fivem/lib/shared";
+import { EVENTS, FUEL_BAG, readSettings, readStation } from "common/fuel";
 
 import { configurePump } from "./pump";
 
@@ -105,23 +106,19 @@ onCache("seat", (seat) =>
 if (cache.seat === -1 && cache.vehicle !== false) burner.start(cache.vehicle);
 
 configurePump(burner.settings.refuelSecondsPerLiter);
+/** Station blips, one record at a time; refuelling itself happens at the map's pumps (`pump.ts`). */
+const blips = new Blips();
+const stations = new RecordObjects(world, "stations", readStation, (id, s) => {
+  if (!s.blip) return;
+  blips.add(id, {
+    coords: { x: s.x, y: s.y, z: s.z },
+    ...burner.settings.blip,
+    label: s.label,
+  });
+  return () => blips.remove(id);
+});
 world.onChange("settings", () => {
   configurePump(burner.settings.refuelSecondsPerLiter);
-  rebuild();
+  // The blip look is a setting every station reads.
+  stations.rebuildAll();
 });
-
-/** Station blips; refuelling itself happens at the map's pumps (`pump.ts`). */
-const blips = new Blips();
-function rebuild(): void {
-  blips.clear();
-  for (const station of readStations(world.get("stations")).values())
-    if (station.blip)
-      blips.add(station.id, {
-        coords: { x: station.x, y: station.y, z: station.z },
-        ...burner.settings.blip,
-        label: station.label,
-      });
-}
-
-rebuild();
-world.onChange("stations", rebuild);

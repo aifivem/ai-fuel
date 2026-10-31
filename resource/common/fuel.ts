@@ -106,23 +106,19 @@ export function readSettings(raw: unknown): Settings {
   };
 }
 
-export function readStations(raw: unknown): Map<string, Station> {
-  const out = new Map<string, Station>();
-  for (const [id, value] of Object.entries(record(raw))) {
-    const v = record(value);
-    const c = record(v.coords);
-    out.set(id, {
-      id,
-      label: str(v.label, id, 48),
-      x: num(c.x, 0),
-      y: num(c.y, 0),
-      z: num(c.z, 0),
-      radius: num(v.radius, 12, 2, 40),
-      price: num(v.price, 3, 0, 1000),
-      blip: bool(v.blip, true),
-    });
-  }
-  return out;
+/** One station record (`panel.records` / `world.records`). */
+export function readStation(id: string, v: Record<string, unknown>): Station {
+  const c = record(v.coords);
+  return {
+    id,
+    label: str(v.label, id, 48),
+    x: num(c.x, 0),
+    y: num(c.y, 0),
+    z: num(c.z, 0),
+    radius: num(v.radius, 12, 2, 40),
+    price: num(v.price, 3, 0, 1000),
+    blip: bool(v.blip, true),
+  };
 }
 
 /** Default electric models (panel `electricModels`): no fuel use (no charging stations yet). */

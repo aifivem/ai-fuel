@@ -28,7 +28,7 @@ import {
   HOSE_LENGTH,
   NOZZLE_BAG,
   readSettings,
-  readStations,
+  readStation,
   toNozzle,
   type Nozzle,
 } from "common/fuel";
@@ -37,7 +37,7 @@ import { fuelSchema } from "./schema";
 const core = resourceExport("ai-core");
 const panel = new AdminPanel(fuelSchema);
 const settings = panel.view("settings", readSettings);
-const stations = panel.view("stations", readStations);
+const stations = panel.records("stations", readStation);
 aiLogChannels({ refuels: {} });
 
 const fuelState = new EntityState(FUEL_BAG, stateNumber);
@@ -86,7 +86,7 @@ const setNozzle = (source: number, nozzle: Nozzle | undefined) => {
 
 /** The station a pump stands in. */
 function stationAt(pump: Vec3) {
-  for (const s of stations.value.values())
+  for (const s of stations.values())
     if (
       Math.hypot(pump.x - s.x, pump.y - s.y) <= s.radius + 2 &&
       Math.abs(pump.z - s.z) <= 10

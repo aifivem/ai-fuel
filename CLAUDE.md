@@ -22,5 +22,5 @@ Fuel use and gas stations. The fuel of a vehicle is the `fuel` entity state bag 
 
 ## Entry points
 
-- Server: consume and refuel `resource/server/index.ts`; panel `server/schema.ts`.
-- Client: burner and station blips (lib `RecordObjects`: an edited station redraws only its blip, a settings change all of them) `resource/client/index.ts`, pump flow `client/pump.ts`, nozzle and hose drawing `client/nozzle.ts`, attach and rope numbers `client/placement.ts`.
+- Server: panel and settings `resource/server/content.ts`, fuel bag and ai-vehicles save `server/tank.ts`, consume `server/consume.ts`, nozzle state `server/nozzles.ts`, take / plug / return `server/hose.ts`, refuel `server/refuel.ts`; panel `server/schema.ts`.
+- Client: burner `resource/client/burner.ts`, station blips (lib `RecordObjects`: an edited station redraws only its blip, a settings change all of them) `client/stations.ts`, pump flow `client/pump.ts`, nozzle and hose drawing `client/nozzle.ts`, attach and rope numbers `client/placement.ts`.

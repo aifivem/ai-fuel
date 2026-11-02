@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/aifivem/ai-fuel/compare/v0.1.5...v0.2.0) (2026-11-02)
+
+
+### New Features
+
+* **fuel:** apply every server change of the fuel state to the driven vehicle, as ox_fuel ([575e959](https://github.com/aifivem/ai-fuel/commit/575e9590d4e60faa5a12603348a89a168943a806))
+
 ## [0.1.5](https://github.com/aifivem/ai-fuel/compare/v0.1.4...v0.1.5) (2026-11-02)
 
 

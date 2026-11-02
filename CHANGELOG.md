@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/aifivem/ai-fuel/compare/v0.1.3...v0.1.4) (2026-11-02)
+
+
+### Code Refactoring
+
+* import the shared packages from [@aifivem](https://github.com/aifivem) ([47cdd9f](https://github.com/aifivem/ai-fuel/commit/47cdd9f373440e5917063d8c17aa7876ffe5230c))
+
 ## [0.1.3](https://github.com/aifivem/ai-fuel/compare/v0.1.2...v0.1.3) (2026-11-01)
 
 

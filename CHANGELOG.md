@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.5](https://github.com/aifivem/ai-fuel/compare/v0.1.4...v0.1.5) (2026-11-02)
+
+
+### Documentation
+
+* install from the release zip ([2a87468](https://github.com/aifivem/ai-fuel/commit/2a874681e22c9d5c0650899606d256e086fb3f88))
+
+
+### Miscellaneous Chores
+
+* build files are no longer in git, the release zip carries them ([1c28a95](https://github.com/aifivem/ai-fuel/commit/1c28a952e050a77cb9520951a5eceb1d1bd11cfe))
+
 ## [0.1.4](https://github.com/aifivem/ai-fuel/compare/v0.1.3...v0.1.4) (2026-11-02)
 
 

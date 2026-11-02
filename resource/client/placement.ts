@@ -1,4 +1,4 @@
-import { sleep } from "@aicore-fivem/lib/shared";
+import { sleep } from "@aifivem/lib/shared";
 
 /** Left hand (SKEL_L_Hand). */
 const HAND_BONE = 18905;

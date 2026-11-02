@@ -3,8 +3,8 @@ import {
   PlayerMap,
   PlayerState,
   vehicleFromNet,
-} from "@aicore-fivem/lib/server";
-import { distance, flatDistance, type Vec3 } from "@aicore-fivem/lib/shared";
+} from "@aifivem/lib/server";
+import { distance, flatDistance, type Vec3 } from "@aifivem/lib/shared";
 import {
   HOSE_LENGTH,
   NOZZLE_BAG,

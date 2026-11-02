@@ -5,8 +5,8 @@ import {
   playerPed,
   PlayerState,
   requestModel,
-} from "@aicore-fivem/lib/client";
-import { waitFor } from "@aicore-fivem/lib/shared";
+} from "@aifivem/lib/client";
+import { waitFor } from "@aifivem/lib/shared";
 import { NOZZLE_BAG, PUMP_MODELS, toNozzle, type Nozzle } from "common/fuel";
 import { addHose, attachToHand, attachToVehicle } from "./placement";
 

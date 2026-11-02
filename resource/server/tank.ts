@@ -2,7 +2,7 @@ import {
   EntityState,
   optionalExport,
   stateNumber,
-} from "@aicore-fivem/lib/server";
+} from "@aifivem/lib/server";
 import { FUEL_BAG } from "common/fuel";
 
 export const fuelState = new EntityState(FUEL_BAG, stateNumber);

@@ -1,5 +1,5 @@
-import { Blips } from "@aicore-fivem/lib/client";
-import { RecordObjects } from "@aicore-fivem/lib/shared";
+import { Blips } from "@aifivem/lib/client";
+import { RecordObjects } from "@aifivem/lib/shared";
 import { readStation } from "common/fuel";
 import { burner } from "./burner";
 import { configurePump } from "./pump";

@@ -6,8 +6,8 @@ import {
   readId,
   record,
   str,
-} from "@aicore-fivem/lib/shared";
-import { VEHICLE_BAGS } from "@aicore-fivem/shared";
+} from "@aifivem/lib/shared";
+import { VEHICLE_BAGS } from "@aifivem/shared";
 
 /** ai-fuel's contracts and panel content. No natives. */
 
